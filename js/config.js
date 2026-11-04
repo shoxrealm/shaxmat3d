@@ -3,7 +3,7 @@
 
 export const BOT_USERNAME = 'Shaxmat3DBot';
 // Onlayn server (Cloudflare Worker). Boʻsh boʻlsa onlayn rejim oʻchiq.
-export const API_BASE = '';
+export const API_BASE = 'https://shaxmat3d-server.davr-home-catalog-server.workers.dev';
 
 export const LEVELS = [
   { id: 0, name: 'Boshlovchi', emoji: '🐣', opts: { timeMs: 250, randomness: 160 } },
