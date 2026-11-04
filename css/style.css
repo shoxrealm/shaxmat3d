@@ -132,3 +132,13 @@ table.stats th { color: var(--muted); font-weight: 500; }
 table.stats td:first-child, table.stats th:first-child { text-align: left; }
 .toast { position: fixed; left: 50%; top: calc(80px + var(--safe-top) + var(--tg-top)); transform: translateX(-50%); z-index: 40; padding: 11px 18px; border-radius: 14px;
   background: rgba(30,27,50,.95); border: 1px solid var(--line); font-size: 14px; font-weight: 600; box-shadow: 0 10px 30px rgba(0,0,0,.4); animation: fade .2s both; max-width: 90vw; text-align: center; }
+
+/* Onlayn */
+.clk { font-variant-numeric: tabular-nums; font-weight: 800; font-size: 17px; padding: 6px 10px; border-radius: 11px; background: rgba(0,0,0,.35); color: #cfc8ea; min-width: 64px; text-align: center; }
+.clk.run { background: #f4f1ff; color: #14101f; box-shadow: 0 0 16px rgba(255,255,255,.35); }
+.clk.low.run { background: #ff4d63; color: #fff; animation: blink 1s infinite; }
+.femoji { position: fixed; z-index: 30; font-size: 54px; pointer-events: none; animation: femoji 2.2s ease-out forwards; filter: drop-shadow(0 6px 14px rgba(0,0,0,.5)); }
+@keyframes femoji { 0% { transform: scale(.2) translateY(20px); opacity: 0; } 15% { transform: scale(1.25); opacity: 1; } 30% { transform: scale(1); } 80% { opacity: 1; } 100% { transform: translateY(-60px); opacity: 0; } }
+.delta { font-weight: 800; font-size: 18px; }
+.delta.up { color: var(--good); } .delta.down { color: var(--bad); }
+.searching { animation: float 1.4s ease-in-out infinite; }

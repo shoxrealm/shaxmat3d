@@ -1,7 +1,9 @@
 // Shaxmat 3D — konfiguratsiya: mavzular, effektlar, doʻkon mahsulotlari.
 // invoiceUrl — bot (createInvoiceLink) orqali yaratilgan doimiy Telegram Stars havolalari.
 
-export const BOT_USERNAME = 'OyinGoBot';
+export const BOT_USERNAME = 'Shaxmat3DBot';
+// Onlayn server (Cloudflare Worker). Boʻsh boʻlsa onlayn rejim oʻchiq.
+export const API_BASE = '';
 
 export const LEVELS = [
   { id: 0, name: 'Boshlovchi', emoji: '🐣', opts: { timeMs: 250, randomness: 160 } },

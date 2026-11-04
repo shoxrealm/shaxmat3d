@@ -1,7 +1,8 @@
 // Shaxmat 3D — ilova oqimi, UI va oʻyin mantiqi.
 import { Chess } from './vendor/chess.js';
 import { Scene3D } from './scene.js';
-import { LEVELS, THEMES, EFFECTS, ITEMS, FREE_UNDOS, FREE_HINTS } from './config.js';
+import { LEVELS, THEMES, EFFECTS, ITEMS, FREE_UNDOS, FREE_HINTS, BOT_USERNAME } from './config.js';
+import * as NET from './net.js';
 import { INVOICES } from './invoices.js';
 import * as TG from './telegram.js';
 import { play, setSound } from './sound.js';
@@ -53,6 +54,7 @@ function kingSquare(color) {
 
 // ───────────── saqlash ─────────────
 function saveGame() {
+  if (S.mode === 'online') return;
   if (!S.mode || S.over) { TG.storeSet('game', null); return; }
   const moves = S.chess.history({ verbose: true }).map((m) => m.from + m.to + (m.promotion || ''));
   TG.storeSet('game', { mode: S.mode, level: S.level, player: S.player, moves, undos: S.undos, hints: S.hints });
@@ -73,13 +75,20 @@ function updateHUD() {
   const mat = (c) => capturedBy[c].reduce((s, p) => s + VAL[p], 0);
   const bottomColor = scene.orientation;
   const topColor = bottomColor === 'w' ? 'b' : 'w';
+  const room = S.mode === 'online' && S.online && S.online.room;
   const name = (c) => {
     if (S.mode === 'ai') return c === S.player ? `🙂 ${TG.userName()}` : `🤖 Kompyuter · ${LEVELS[S.level].name}`;
+    if (room) {
+      const p = c === 'w' ? room.white : room.black;
+      if (!p) return 'Raqib kutilmoqda…';
+      return `${p.online === false ? '⚪️' : '🟢'} ${p.name} · ${p.rating}`;
+    }
     return c === 'w' ? '⚪ Oq' : '⚫ Qora';
   };
   for (const [bar, c] of [[$('#barTop'), topColor], [$('#barBottom'), bottomColor]]) {
     bar.querySelector('.pname').textContent = name(c);
     bar.querySelector('.ava').textContent = S.mode === 'ai' && c !== S.player ? '🤖' : c === 'w' ? '♔' : '♚';
+    bar.dataset.color = c;
     const opp = c === 'w' ? 'b' : 'w';
     bar.querySelector('.caps').textContent = capturedBy[c].sort((a, b) => VAL[b] - VAL[a]).map((p) => GLYPH[opp][p]).join('');
     const d = mat(c) - mat(opp);
@@ -97,11 +106,41 @@ function updateHUD() {
   }
   box.scrollLeft = box.scrollWidth;
   const pro = isPro();
-  $('#tUndo em').textContent = pro ? '∞' : String(Math.max(0, FREE_UNDOS - S.undos));
-  $('#tHint em').textContent = pro ? '∞' : String(Math.max(0, FREE_HINTS - S.hints));
+  const on = S.mode === 'online';
+  $('#tUndo em').textContent = on ? '' : pro ? '∞' : String(Math.max(0, FREE_UNDOS - S.undos));
+  $('#tHint em').textContent = on ? '' : pro ? '∞' : String(Math.max(0, FREE_HINTS - S.hints));
+  $('#tUndo i').textContent = on ? '😀' : '↶'; $('#tUndo span').textContent = on ? 'Emoji' : 'Orqaga';
+  $('#tHint i').textContent = on ? '🤝' : '💡'; $('#tHint span').textContent = on ? 'Durang' : 'Maslahat';
   $('#tResign span').textContent = S.mode === 'friend' ? 'Durang' : 'Taslim';
   $('#tResign i').textContent = S.mode === 'friend' ? '🤝' : '🏳️';
+  drawClocks();
 }
+
+// ───────────── onlayn: soatlar ─────────────
+function fmtClock(ms) {
+  ms = Math.max(0, ms);
+  const s = Math.ceil(ms / 1000), m = Math.floor(s / 60);
+  return ms < 10000 ? (ms / 1000).toFixed(1) : `${m}:${String(s % 60).padStart(2, '0')}`;
+}
+function clockLeft(c) {
+  const r = S.online && S.online.room;
+  if (!r || !r.tc || !r.tc.base) return null;
+  let ms = r.clocks[c];
+  if (r.status === 'playing' && r.turnStartedAt && S.chess.turn() === c) ms -= Date.now() + S.online.offset - r.turnStartedAt;
+  return ms;
+}
+function drawClocks() {
+  for (const bar of [$('#barTop'), $('#barBottom')]) {
+    let el = bar.querySelector('.clk');
+    const ms = S.mode === 'online' ? clockLeft(bar.dataset.color) : null;
+    if (ms === null) { if (el) el.remove(); continue; }
+    if (!el) { el = document.createElement('div'); el.className = 'clk'; bar.appendChild(el); }
+    el.textContent = fmtClock(ms);
+    el.classList.toggle('low', ms < 20000);
+    el.classList.toggle('run', S.online.room.status === 'playing' && S.chess.turn() === bar.dataset.color && !!S.online.room.turnStartedAt);
+  }
+}
+setInterval(() => { if (S.mode === 'online') drawClocks(); }, 200);
 
 function setThinking(on) {
   const aiColor = S.player === 'w' ? 'b' : 'w';
@@ -146,7 +185,10 @@ function afterPosition(quiet = false) {
   if (!quiet && S.chess.inCheck() && !S.chess.isCheckmate()) { flashStatus('Shoh! ⚠️'); play('check'); TG.haptic('warning'); }
 }
 
-function isHumanTurn() { return S.mode === 'friend' || S.chess.turn() === S.player; }
+function isHumanTurn() {
+  if (S.mode === 'online') { const r = S.online && S.online.room; return !!r && r.status === 'playing' && r.you === S.chess.turn(); }
+  return S.mode === 'friend' || S.chess.turn() === S.player;
+}
 
 function onTap(sq, dropped = false) {
   if (S.busy || S.over || !S.mode || !isHumanTurn()) return false;
@@ -181,17 +223,28 @@ async function humanMove(from, to, dropped) {
     promotion = await choosePromotion(S.chess.turn());
     S.busy = false;
   }
-  await playMove({ from, to, promotion }, dropped);
+  await playMove({ from, to, promotion }, dropped, true);
   if (!S.over && S.mode === 'friend' && S.settings.autoRotate) await scene.setOrientation(S.chess.turn());
   if (S.mode === 'friend') updateHUD();
   maybeAI();
 }
 
-async function playMove(m, dropped = false) {
+async function playMove(m, dropped = false, local = false) {
   S.busy = true;
   S.selected = null; scene.clearSelection(); scene.clearHint();
   let mv;
   try { mv = S.chess.move(m); } catch (e) { S.busy = false; return; }
+  if (local && S.mode === 'online' && S.online) {
+    const ply = S.chess.history().length - 1;
+    S.online.ws.send({ t: 'move', uci: mv.from + mv.to + (mv.promotion || ''), ply });
+    const r = S.online.room;
+    if (r && r.status === 'playing' && r.turnStartedAt) { // soatni darhol raqibga oʻtkazamiz (server tasdiqlaguncha)
+      const now = Date.now() + S.online.offset;
+      r.clocks[mv.color] -= now - r.turnStartedAt; r.turnStartedAt = now;
+    } else if (r && r.status === 'playing') r.turnStartedAt = Date.now() + S.online.offset;
+    r && r.moves.push(mv.from + mv.to + (mv.promotion || ''));
+    S.online.drawOffer = null;
+  }
   const kind = mv.flags.includes('k') || mv.flags.includes('q') ? 'castle' : mv.captured ? 'capture' : 'move';
   if (kind === 'capture' && scene.effect === 'chaqmoq') setTimeout(() => play('zap'), 250);
   if (kind === 'capture' && scene.effect === 'olov') setTimeout(() => play('fire'), 250);
@@ -220,6 +273,7 @@ async function maybeAI() {
 }
 
 async function checkGameOver(forced = null) {
+  if (S.mode === 'online') return; // onlayn oʻyin natijasini server hal qiladi
   const c = S.chess;
   let result = null, reason = null, winner = null;
   if (forced) ({ result, reason, winner } = forced);
@@ -276,9 +330,12 @@ function showResult(outcome, reason, winner) {
 
 function goHome() {
   closeModal(); S.aiReq++;
+  leaveOnline();
   S.busy = false; S.selected = null; scene.clearSelection(); scene.clearHint();
+  const wasOnline = S.mode === 'online';
   if (!S.over && S.mode) saveGame();
   S.mode = null;
+  if (wasOnline) { S.chess = new Chess(); scene.syncBoard(S.chess.board()); scene.setLastMove(null); scene.setCheck(null); }
   $('#hud').classList.add('hidden'); $('#home').classList.remove('hidden');
   $('#btnContinue').classList.toggle('hidden', !S.chess.history().length || S.over);
   TG.setBack(null);
@@ -288,6 +345,7 @@ function goHome() {
 
 // ───────────── asboblar ─────────────
 async function doUndo() {
+  if (S.mode === 'online') return openEmoji();
   if (S.busy || !S.mode || S.over) return;
   if (!S.chess.history().length) return toast('Hali yurish qilinmagan');
   if (!isPro() && S.undos >= FREE_UNDOS) return upsell('Bepul «Orqaga» tugadi (oʻyinda 3 ta).');
@@ -304,6 +362,7 @@ async function doUndo() {
 }
 
 async function doHint() {
+  if (S.mode === 'online') return offerDraw();
   if (S.busy || !S.mode || S.over || !isHumanTurn()) return;
   if (!isPro() && S.hints >= FREE_HINTS) return upsell('Bepul maslahat tugadi (oʻyinda 1 ta).');
   S.busy = true; toast('💡 Oʻylayapman…', 1200);
@@ -313,6 +372,13 @@ async function doHint() {
 }
 
 function doResign() {
+  if (S.mode === 'online') {
+    if (S.over || !S.online.room || !S.online.room.you) return;
+    openModal(`<h2>Taslim boʻlasizmi? 🏳️</h2><p class="muted" style="text-align:center">Oʻyin magʻlubiyat sifatida yoziladi.</p>
+      <button class="btn primary" id="yes">Ha, taslim</button><button class="btn ghost" data-close>Davom etish</button>`);
+    $('#yes').onclick = () => { closeModal(); S.online.ws.send({ t: 'resign' }); };
+    return;
+  }
   if (S.busy || !S.mode || S.over) return;
   if (S.mode === 'friend') {
     openModal(`<h2>Durang taklifi 🤝</h2><p class="muted" style="text-align:center">Ikkala oʻyinchi ham rozimi?</p>
@@ -333,9 +399,250 @@ function upsell(text) {
   $('#upShop').onclick = () => openShop();
 }
 
+// ───────────── onlayn oʻyin ─────────────
+const TCS = [['60+0', '⚡ 1 daq'], ['180+0', '🔥 3 daq'], ['180+2', '3 + 2'], ['300+0', '⏱ 5 daq'], ['600+0', '🕰 10 daq']];
+const tcText = (tc) => (!tc || !tc.base ? 'Vaqtsiz' : `${tc.base / 60} daq${tc.inc ? ' + ' + tc.inc + ' s' : ''}`);
+const OREASON = { ...REASON, timeout: 'Vaqt tugadi', abandon: 'Oʻyinchi oʻyinni tashlab ketdi', aborted: 'Oʻyin bekor qilindi' };
+const EMOJIS = ['👍', '😂', '😮', '😡', '🤝', '🔥', '👏', '😎'];
+
+function needOnline() {
+  if (NET.onlineAvailable()) return true;
+  toast(NET.API ? 'Onlayn oʻyin faqat Telegram ichida ishlaydi' : 'Onlayn server tez orada ishga tushadi');
+  return false;
+}
+
+function openOnline() {
+  if (!needOnline()) return;
+  const me = S.me;
+  openModal(`<h2>🌐 Onlayn</h2>${me ? `<p class="muted" style="text-align:center">Reytingingiz: <b>${me.rating}</b> · ${me.games} oʻyin</p>` : ''}
+    <p class="muted">⚡ Tasodifiy raqib (reytingli)</p>
+    <div class="chips" id="tcQuick">${TCS.map(([v, l]) => `<button class="chip" data-tc="${v}">${l}</button>`).join('')}</div>
+    <p class="muted">🔗 Doʻstni havola orqali chaqirish</p>
+    <div class="chips" id="tcFriend">${[...TCS, ['0+0', '♾ Vaqtsiz']].map(([v, l]) => `<button class="chip ${v === '600+0' ? 'active' : ''}" data-tc="${v}">${l}</button>`).join('')}</div>
+    <button class="btn primary" id="btnInvite">🔗 Taklif havolasini yaratish</button>
+    <button class="btn" id="btnTop">🏆 Reyting jadvali</button><button class="btn ghost" data-close>Yopish</button>`);
+  const c = $('#modalCard');
+  c.querySelectorAll('#tcQuick .chip').forEach((b) => (b.onclick = () => startMatch(b.dataset.tc)));
+  c.querySelectorAll('#tcFriend .chip').forEach((b) => (b.onclick = () => { c.querySelectorAll('#tcFriend .chip').forEach((x) => x.classList.toggle('active', x === b)); play('click'); }));
+  $('#btnInvite').onclick = () => createRoom(c.querySelector('#tcFriend .chip.active').dataset.tc);
+  $('#btnTop').onclick = () => openTop();
+}
+
+function startMatch(tc) {
+  play('click');
+  if (S.matchWs) S.matchWs.close();
+  const t0 = Date.now();
+  openModal(`<div class="result"><div class="big searching">🔎</div><h2>Raqib qidirilmoqda…</h2>
+    <p>${tcText({ base: +tc.split('+')[0], inc: +tc.split('+')[1] })} · <span id="mmT">0</span> s</p>
+    <button class="btn ghost" id="mmCancel">Bekor qilish</button></div>`);
+  const tick = setInterval(() => { const el = $('#mmT'); if (el) el.textContent = Math.floor((Date.now() - t0) / 1000); else clearInterval(tick); }, 500);
+  const cancel = () => { clearInterval(tick); if (S.matchWs) { S.matchWs.close(); S.matchWs = null; } };
+  closeModal.onClose = cancel;
+  $('#mmCancel').onclick = () => closeModal();
+  S.matchWs = new NET.Socket(`/ws/match?tc=${encodeURIComponent(tc)}`, (m) => {
+    if (m.t === 'matched') { closeModal.onClose = null; cancel(); play('promote'); TG.haptic('success'); joinRoom(m.room); }
+    else if (m.t === 'error') { toast(m.msg || 'Xatolik'); cancel(); closeModal(); }
+  });
+}
+
+async function createRoom(tc) {
+  play('click');
+  const [base, inc] = tc.split('+').map(Number);
+  try {
+    const r = await NET.api('/api/room', { tc: { base, inc }, color: 'r' });
+    S.inviteLink = r.link;
+    joinRoom(r.id);
+  } catch (e) { toast('Xona yaratib boʻlmadi: ' + e.message); }
+}
+
+function leaveOnline() {
+  if (S.matchWs) { S.matchWs.close(); S.matchWs = null; }
+  if (S.online && S.online.ws) S.online.ws.close();
+  S.online = null;
+}
+
+function joinRoom(id) {
+  if (!needOnline()) return;
+  closeModal(); leaveOnline();
+  S.mode = 'online'; S.over = false; S.busy = true; S.selected = null;
+  S.online = { id, room: null, offset: 0, firstState: true };
+  $('#home').classList.add('hidden'); $('#hud').classList.remove('hidden');
+  TG.setBack(() => goHome());
+  scene.setInsets(78, 192); scene.setIdle(false); scene.clearSelection(); scene.clearHint();
+  S.online.ws = new NET.Socket(`/ws/room/${id}`, onNetMsg, (st) => {
+    if (st === 'reconnecting') toast('📡 Qayta ulanmoqda…', 1500);
+  });
+  updateHUD();
+}
+
+async function onNetMsg(m) {
+  const O = S.online;
+  if (!O) return;
+  switch (m.t) {
+    case 'state': return applyRoomState(m.room);
+    case 'move': return onRemoteMove(m);
+    case 'over': return onOnlineOver(m);
+    case 'presence':
+      if (O.room) { if (O.room.white) O.room.white.online = m.w; if (O.room.black) O.room.black.online = m.b; updateHUD(); }
+      return;
+    case 'draw_offer':
+      if (m.by !== O.room.you && O.room.you) {
+        play('check');
+        openModal(`<h2>🤝 Durang taklifi</h2><p class="muted" style="text-align:center">Raqibingiz durang taklif qilyapti.</p>
+          <button class="btn primary" id="dYes">Qabul qilish</button><button class="btn" id="dNo">Rad etish</button>`);
+        $('#dYes').onclick = () => { closeModal(); O.ws.send({ t: 'draw_accept' }); };
+        $('#dNo').onclick = () => { closeModal(); O.ws.send({ t: 'draw_decline' }); };
+      }
+      return;
+    case 'draw_declined': if (m.by !== O.room.you) toast('Raqib durangni rad etdi'); return;
+    case 'rematch_offer':
+      if (m.by !== O.room.you) { toast('🔄 Raqib revansh taklif qilyapti!', 3000); const b = $('#oRematch'); if (b) b.textContent = '🔄 Revanshni qabul qilish'; }
+      return;
+    case 'emoji': return floatEmoji(m.by, m.e);
+    case 'error': toast(m.msg || 'Xatolik'); return;
+    default: return;
+  }
+}
+
+async function applyRoomState(room) {
+  const O = S.online;
+  const prev = O.room;
+  O.room = room; O.offset = room.now - Date.now();
+  const c = new Chess(room.startFen || undefined);
+  for (const u of room.moves) { try { c.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] }); } catch (e) { break; } }
+  const newGame = !prev || (prev.status === 'over' || prev.status === 'aborted') && room.status === 'playing' && room.moves.length === 0;
+  const same = c.fen() === S.chess.fen() && !newGame;
+  S.chess = c;
+  S.player = room.you || 'w';
+  S.over = room.status === 'over' || room.status === 'aborted';
+  if (O.firstState || newGame) {
+    O.firstState = false;
+    closeModal();
+    scene.setOrientation(S.player);
+    await scene.setBoard(c.board(), true);
+    if (newGame && prev) { play('castle'); flashStatus('Yangi oʻyin! ♟', 1200); }
+  } else if (!same) {
+    await scene.syncBoard(c.board());
+  }
+  afterPosition(true);
+  S.busy = false;
+  if (room.status === 'waiting') showWaiting(room);
+  else if (!S.over && !$('#modal').classList.contains('hidden') && $('#modalCard').dataset.kind === 'waiting') { closeModal(); play('promote'); flashStatus('Oʻyin boshlandi!', 1200); TG.haptic('success'); }
+  if (!room.you && room.status !== 'waiting') toast('👀 Siz tomoshabinsiz', 2500);
+  updateHUD();
+}
+
+function showWaiting(room) {
+  const link = S.inviteLink || `https://t.me/${BOT_USERNAME}/play?startapp=r_${room.id}`;
+  openModal(`<div class="result"><div class="big searching">⏳</div><h2>Doʻstingiz kutilmoqda…</h2>
+    <p>${tcText(room.tc)} · Havolani doʻstingizga yuboring</p>
+    <button class="btn primary" id="wShare">📤 Telegramda yuborish</button>
+    <button class="btn" id="wCopy">🔗 Havolani nusxalash</button>
+    <button class="btn ghost" id="wLeave">Bekor qilish</button></div>`);
+  $('#modalCard').dataset.kind = 'waiting';
+  $('#wShare').onclick = () => {
+    const tg = window.Telegram && window.Telegram.WebApp;
+    if (tg && tg.switchInlineQuery) { try { tg.switchInlineQuery('r_' + room.id, ['users', 'groups']); return; } catch (e) { /* pastga */ } }
+    if (tg && tg.openTelegramLink) tg.openTelegramLink('https://t.me/share/url?url=' + encodeURIComponent(link) + '&text=' + encodeURIComponent('♟ Keling, Shaxmat 3D da bellashamiz!'));
+  };
+  $('#wCopy').onclick = async () => {
+    try { await navigator.clipboard.writeText(link); toast('✅ Havola nusxalandi'); } catch (e) { toast(link, 5000); }
+  };
+  $('#wLeave').onclick = () => goHome();
+}
+
+async function onRemoteMove(m) {
+  const O = S.online, r = O.room;
+  if (!r) return;
+  r.clocks = m.clocks; r.turnStartedAt = m.now; O.offset = m.now - Date.now();
+  if (r.status === 'waiting') r.status = 'playing';
+  const have = S.chess.history().length;
+  if (m.ply < have) { drawClocks(); return; } // oʻz yurishimiz tasdiqlandi
+  if (m.ply > have) { O.ws.close(); joinRoom(O.id); return; } // sinxron emas — qayta ulanamiz
+  while (S.busy) await new Promise((res) => setTimeout(res, 50));
+  r.moves.push(m.uci);
+  await playMove({ from: m.uci.slice(0, 2), to: m.uci.slice(2, 4), promotion: m.uci[4] });
+  updateHUD();
+}
+
+async function onOnlineOver(m) {
+  const O = S.online, r = O.room;
+  if (!r || S.over && r.result) return;
+  r.status = m.reason === 'aborted' ? 'aborted' : 'over'; r.result = m.result; r.reason = m.reason; r.ratingDelta = m.ratingDelta;
+  S.over = true;
+  while (S.busy) await new Promise((res) => setTimeout(res, 50));
+  updateHUD();
+  const winner = m.result === '1-0' ? 'w' : m.result === '0-1' ? 'b' : null;
+  const you = r.you;
+  const outcome = !you ? 'watch' : !winner ? 'draw' : winner === you ? 'win' : 'loss';
+  if (m.reason === 'checkmate') { flashStatus('Mat! ♚', 1400); scene.checkmate(kingSquare(S.chess.turn()), winner); }
+  else if (winner) scene.checkmate(kingSquare(winner === 'w' ? 'b' : 'w'), winner);
+  else if (m.reason !== 'aborted') scene.drawEffect([kingSquare('w'), kingSquare('b')]);
+  play(outcome === 'win' ? 'win' : outcome === 'loss' ? 'lose' : 'draw');
+  TG.haptic(outcome === 'loss' ? 'error' : 'success');
+  if (S.me && you && m.ratingDelta && m.ratingDelta[you] != null) S.me.rating += m.ratingDelta[you];
+  await new Promise((res) => setTimeout(res, winner ? 1800 : 900));
+  const d = you && m.ratingDelta ? m.ratingDelta[you] : null;
+  const big = m.reason === 'aborted' ? '🚫' : outcome === 'win' ? '🎉' : outcome === 'loss' ? '😔' : outcome === 'draw' ? '🤝' : '🏁';
+  const title = m.reason === 'aborted' ? 'Bekor qilindi' : outcome === 'win' ? 'Gʻalaba!' : outcome === 'loss' ? 'Magʻlubiyat' : outcome === 'draw' ? 'Durang' : (winner === 'w' ? 'Oq' : winner === 'b' ? 'Qora' : 'Durang') + (winner ? ' yutdi' : '');
+  openModal(`<div class="result"><div class="big">${big}</div><h2>${title}</h2><p>${OREASON[m.reason] || ''}</p>
+    ${d != null ? `<p class="delta ${d >= 0 ? 'up' : 'down'}">Reyting: ${d >= 0 ? '+' : ''}${d}${S.me ? ' → ' + S.me.rating : ''}</p>` : ''}
+    ${you ? '<button class="btn primary" id="oRematch">🔄 Revansh</button>' : ''}
+    <button class="btn" id="oNew">🌐 Yangi raqib</button><button class="btn ghost" id="oHome">Bosh menyu</button></div>`);
+  const rb = $('#oRematch');
+  if (rb) rb.onclick = () => { O.ws.send({ t: 'rematch' }); rb.textContent = '⏳ Raqib javobini kutish…'; rb.disabled = true; };
+  $('#oNew').onclick = () => { goHome(); openOnline(); };
+  $('#oHome').onclick = () => goHome();
+}
+
+function offerDraw() {
+  const r = S.online && S.online.room;
+  if (!r || S.over || !r.you || r.status !== 'playing') return;
+  if (S.online.drawOffer === 'sent') return toast('Taklif yuborilgan');
+  S.online.drawOffer = 'sent';
+  S.online.ws.send({ t: 'draw_offer' });
+  toast('🤝 Durang taklifi yuborildi');
+}
+
+function openEmoji() {
+  const r = S.online && S.online.room;
+  if (!r || !r.you) return;
+  openModal(`<h2>Emoji yuborish</h2><div class="promo" style="flex-wrap:wrap">${EMOJIS.map((e) => `<button data-e="${e}">${e}</button>`).join('')}</div>`);
+  $('#modalCard').querySelectorAll('[data-e]').forEach((b) => (b.onclick = () => { closeModal(); S.online.ws.send({ t: 'emoji', e: b.dataset.e }); }));
+}
+
+function floatEmoji(by, e) {
+  const bar = $('#barTop').dataset.color === by ? $('#barTop') : $('#barBottom');
+  const el = document.createElement('div');
+  el.className = 'femoji'; el.textContent = e;
+  const r = bar.getBoundingClientRect();
+  el.style.left = (r.left + 40) + 'px'; el.style.top = (bar.classList.contains('top') ? r.bottom + 6 : r.top - 70) + 'px';
+  document.body.appendChild(el);
+  play('click'); TG.haptic('light');
+  setTimeout(() => el.remove(), 2200);
+}
+
+async function openTop() {
+  if (!needOnline()) return;
+  openModal('<h2>🏆 Reyting</h2><p class="muted" style="text-align:center">Yuklanmoqda…</p>');
+  try {
+    const [top, me] = await Promise.all([NET.api('/api/top'), NET.api('/api/me')]);
+    S.me = me;
+    const medals = ['🥇', '🥈', '🥉'];
+    openModal(`<h2>🏆 Reyting</h2><table class="stats"><tr><th>#</th><th>Oʻyinchi</th><th>Reyting</th><th>Oʻyin</th></tr>
+      ${top.slice(0, 50).map((u, i) => `<tr><td>${medals[i] || i + 1}</td><td style="text-align:left">${escapeHtml(u.name)}</td><td>${u.rating}</td><td>${u.games}</td></tr>`).join('') || '<tr><td colspan="4">Hali reytingli oʻyinlar yoʻq</td></tr>'}</table>
+      <p class="muted" style="text-align:center">Siz: <b>${me.rating}</b> · ${me.wins} gʻalaba · ${me.losses} magʻlubiyat · ${me.draws} durang</p>
+      <button class="btn primary" id="tPlay">⚡ Reytingli oʻyin</button><button class="btn ghost" data-close>Yopish</button>`);
+    $('#tPlay').onclick = () => openOnline();
+  } catch (e) { toast('Reytingni yuklab boʻlmadi'); closeModal(); }
+}
+
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch])); }
+
 // ───────────── modallar ─────────────
 function openModal(html) {
   $('#modalCard').innerHTML = html;
+  $('#modalCard').dataset.kind = '';
   $('#modal').classList.remove('hidden');
   $('#modal').querySelectorAll('[data-close]').forEach((b) => (b.onclick = () => closeModal()));
   TG.setBack(() => closeModal());
@@ -424,7 +731,7 @@ function use(it) {
 }
 
 async function buy(it, rerender) {
-  const url = INVOICES[it.id] || it.invoiceUrl;
+  const url = (S.invoices && S.invoices[it.id]) || INVOICES[it.id] || it.invoiceUrl;
   if (!TG.inTelegram) return toast('Xarid faqat Telegram ichida ishlaydi');
   if (!url) return toast('Bu mahsulot tez orada sotuvga chiqadi');
   const status = await TG.openInvoice(url);
@@ -516,6 +823,21 @@ async function init() {
     else if (S.chess.history().length) startGame(S.lastMode || 'ai', S.level, S.player, { moves: S.chess.history({ verbose: true }).map((m) => m.from + m.to + (m.promotion || '')), undos: S.undos, hints: S.hints });
   };
   $('#btnAI').onclick = () => { play('click'); openLevels(); };
+  $('#btnOnline').onclick = () => { play('click'); openOnline(); };
+  // onlayn: profil, xaridlar va Stars havolalari serverdan; deep link (startapp=r_<id> | ?room=<id> | top)
+  if (NET.onlineAvailable()) {
+    NET.api('/api/me').then((me) => {
+      S.me = me;
+      for (const id of me.owned || []) S.owned.add(id);
+      saveOwned();
+    }).catch(() => {});
+    NET.api('/api/invoices').then((inv) => { S.invoices = inv; }).catch(() => {});
+    const tg = window.Telegram && window.Telegram.WebApp;
+    const sp = (tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param) || '';
+    const qroom = new URLSearchParams(location.search).get('room');
+    if (sp.startsWith('r_') || qroom) joinRoom(qroom || sp.slice(2));
+    else if (sp === 'top') openTop();
+  }
   $('#btnStartAI').onclick = () => {
     const c = S.settings.lastColor || 'r';
     saveSettings();
