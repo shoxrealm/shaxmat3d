@@ -52,7 +52,12 @@ try {
   await send('Page.navigate', { url });
   await sleep(9000);
   await snap('home');
-  if (scenario !== 'home') {
+  if (scenario === 'tap') {
+    await ev(`document.querySelector('#btnFriend').click()`); await sleep(8000);
+    logs.push('BUSY ' + await ev('__s3d.S.busy') + ' fps-check');
+    const t0 = Date.now(); await ev('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))'); logs.push('2 frames ms ' + (Date.now()-t0));
+    await tapSquare('e2'); await sleep(1500); logs.push('STATE sel=' + await ev('__s3d.S.selected'));
+  } else if (scenario !== 'home') {
     // doʻst bilan rejim: Scholar mate, oʻrtada olish, rokirovka emas
     await ev(`document.querySelector('#btnFriend').click()`); await sleep(3500); await snap('friend_start');
     for (const [a, b] of [['e2', 'e4'], ['e7', 'e5'], ['f1', 'c4'], ['b8', 'c6'], ['d1', 'h5'], ['g8', 'f6']]) {
