@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b0a12">
+<title>Shaxmat 3D</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://telegram.org/js/telegram-web-app.js?57"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="stage"></div>
+
+<div id="loading"><div class="spinner"></div><p>Shaxmat 3D yuklanmoqda…</p></div>
+
+<!-- Bosh menyu -->
+<section id="home" class="screen hidden">
+  <div class="logo"><span class="crown">♛</span><h1>Shaxmat <b>3D</b></h1><p>Premium animatsiyali shaxmat</p></div>
+  <div class="menu">
+    <button id="btnContinue" class="btn primary hidden">▶️ Davom ettirish</button>
+    <button id="btnAI" class="btn primary">🤖 Kompyuterga qarshi</button>
+    <button id="btnFriend" class="btn">👥 Doʻst bilan <small>(bitta telefonda)</small></button>
+    <button class="btn disabled" disabled>🌐 Onlayn <span class="badge">tez orada</span></button>
+    <div class="row">
+      <button id="btnShop" class="btn small">🎨 Doʻkon</button>
+      <button id="btnStats" class="btn small">📊 Statistika</button>
+      <button id="btnSettings" class="btn small">⚙️</button>
+    </div>
+  </div>
+</section>
+
+<!-- Daraja tanlash -->
+<section id="levelSheet" class="sheet hidden">
+  <div class="card">
+    <h2>Kompyuterga qarshi</h2>
+    <p class="muted">Daraja</p>
+    <div id="levels" class="chips"></div>
+    <p class="muted">Rangingiz</p>
+    <div id="colors" class="chips">
+      <button data-c="w" class="chip">⚪ Oq</button>
+      <button data-c="r" class="chip active">🎲 Tasodifiy</button>
+      <button data-c="b" class="chip">⚫ Qora</button>
+    </div>
+    <button id="btnStartAI" class="btn primary">Boshlash</button>
+    <button class="btn ghost" data-close>Bekor qilish</button>
+  </div>
+</section>
+
+<!-- Oʻyin HUD -->
+<section id="hud" class="hidden">
+  <div id="barTop" class="pbar top"><div class="ava">🤖</div><div class="pinfo"><div class="pname"></div><div class="caps"></div></div><div class="think hidden">oʻylayapti<span>.</span><span>.</span><span>.</span></div><div class="adv"></div></div>
+  <div id="barBottom" class="pbar bottom"><div class="ava">🙂</div><div class="pinfo"><div class="pname"></div><div class="caps"></div></div><div class="think hidden">oʻylayapti<span>.</span><span>.</span><span>.</span></div><div class="adv"></div></div>
+  <div id="moves" class="moves"></div>
+  <div class="tools">
+    <button id="tUndo" class="tool"><i>↶</i><span>Orqaga</span><em></em></button>
+    <button id="tHint" class="tool"><i>💡</i><span>Maslahat</span><em></em></button>
+    <button id="tView" class="tool"><i>🧭</i><span>Koʻrinish</span></button>
+    <button id="tResign" class="tool"><i>🏳️</i><span>Taslim</span></button>
+    <button id="tMenu" class="tool"><i>☰</i><span>Menyu</span></button>
+  </div>
+  <div id="status" class="status hidden"></div>
+</section>
+
+<!-- Modallar -->
+<section id="modal" class="sheet hidden"><div class="card" id="modalCard"></div></section>
+<div id="toast" class="toast hidden"></div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

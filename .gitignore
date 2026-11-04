@@ -1,0 +1,4 @@
+codex_*
+node_modules/
+*.log
+
