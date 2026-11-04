@@ -6,6 +6,7 @@ import * as NET from './net.js';
 import { INVOICES } from './invoices.js';
 import * as TG from './telegram.js';
 import { play, setSound } from './sound.js';
+import { icon, medallion } from './icons.js';
 
 const $ = (s) => document.querySelector(s);
 const VAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
@@ -77,17 +78,17 @@ function updateHUD() {
   const topColor = bottomColor === 'w' ? 'b' : 'w';
   const room = S.mode === 'online' && S.online && S.online.room;
   const name = (c) => {
-    if (S.mode === 'ai') return c === S.player ? `🙂 ${TG.userName()}` : `🤖 Kompyuter · ${LEVELS[S.level].name}`;
+    if (S.mode === 'ai') return c === S.player ? escapeHtml(TG.userName()) : `Kompyuter <span class="rt">${LEVELS[S.level].name}</span>`;
     if (room) {
       const p = c === 'w' ? room.white : room.black;
       if (!p) return 'Raqib kutilmoqda…';
-      return `${p.online === false ? '⚪️' : '🟢'} ${p.name} · ${p.rating}`;
+      return `${escapeHtml(p.name)}<span class="rt">${p.rating}</span>${p.online === false ? '<span class="off">tarmoqda emas</span>' : ''}`;
     }
-    return c === 'w' ? '⚪ Oq' : '⚫ Qora';
+    return c === 'w' ? 'Oq' : 'Qora';
   };
   for (const [bar, c] of [[$('#barTop'), topColor], [$('#barBottom'), bottomColor]]) {
-    bar.querySelector('.pname').textContent = name(c);
-    bar.querySelector('.ava').textContent = S.mode === 'ai' && c !== S.player ? '🤖' : c === 'w' ? '♔' : '♚';
+    bar.querySelector('.pname').innerHTML = name(c);
+    bar.querySelector('.ava').className = 'ava ' + c + (S.mode === 'ai' && c !== S.player ? ' ai' : '');
     bar.dataset.color = c;
     const opp = c === 'w' ? 'b' : 'w';
     bar.querySelector('.caps').textContent = capturedBy[c].sort((a, b) => VAL[b] - VAL[a]).map((p) => GLYPH[opp][p]).join('');
@@ -109,10 +110,10 @@ function updateHUD() {
   const on = S.mode === 'online';
   $('#tUndo em').textContent = on ? '' : pro ? '∞' : String(Math.max(0, FREE_UNDOS - S.undos));
   $('#tHint em').textContent = on ? '' : pro ? '∞' : String(Math.max(0, FREE_HINTS - S.hints));
-  $('#tUndo i').textContent = on ? '😀' : '↶'; $('#tUndo span').textContent = on ? 'Emoji' : 'Orqaga';
-  $('#tHint i').textContent = on ? '🤝' : '💡'; $('#tHint span').textContent = on ? 'Durang' : 'Maslahat';
+  $('#tUndo i').innerHTML = icon(on ? 'smile' : 'undo'); $('#tUndo span').textContent = on ? 'Emoji' : 'Orqaga';
+  $('#tHint i').innerHTML = icon(on ? 'half' : 'hint'); $('#tHint span').textContent = on ? 'Durang' : 'Maslahat';
   $('#tResign span').textContent = S.mode === 'friend' ? 'Durang' : 'Taslim';
-  $('#tResign i').textContent = S.mode === 'friend' ? '🤝' : '🏳️';
+  $('#tResign i').innerHTML = icon(S.mode === 'friend' ? 'half' : 'flag');
   drawClocks();
 }
 
@@ -182,7 +183,7 @@ function afterPosition(quiet = false) {
   scene.setLastMove(last ? last.from : null, last ? last.to : null);
   scene.setCheck(S.chess.inCheck() ? kingSquare(S.chess.turn()) : null);
   updateHUD();
-  if (!quiet && S.chess.inCheck() && !S.chess.isCheckmate()) { flashStatus('Shoh! ⚠️'); play('check'); TG.haptic('warning'); }
+  if (!quiet && S.chess.inCheck() && !S.chess.isCheckmate()) { flashStatus('Shoh!'); play('check'); TG.haptic('warning'); }
 }
 
 function isHumanTurn() {
@@ -295,7 +296,7 @@ async function checkGameOver(forced = null) {
   st[outcome === 'win' ? 'w' : outcome === 'loss' ? 'l' : 'd']++;
   TG.storeSet('stats', S.stats);
   if (reason === 'checkmate') {
-    flashStatus('Mat! ♚', 1400);
+    flashStatus('Mat', 1400);
     scene.checkmate(kingSquare(c.turn()), winner);
   } else if (winner) {
     scene.checkmate(kingSquare(winner === 'w' ? 'b' : 'w'), winner);
@@ -311,16 +312,17 @@ async function checkGameOver(forced = null) {
 
 function showResult(outcome, reason, winner) {
   let big, title;
-  if (S.mode === 'friend' && winner) { big = '🏆'; title = (winner === 'w' ? 'Oq' : 'Qora') + ' gʻalaba qozondi!'; }
-  else if (outcome === 'win') { big = '🎉'; title = 'Gʻalaba!'; }
-  else if (outcome === 'loss') { big = '😔'; title = 'Magʻlubiyat'; }
-  else { big = '🤝'; title = 'Durang'; }
+  big = winner === 'w' ? '1–0' : winner === 'b' ? '0–1' : '½–½';
+  if (S.mode === 'friend' && winner) title = (winner === 'w' ? 'Oq' : 'Qora') + ' yutdi';
+  else if (outcome === 'win') title = 'Gʻalaba';
+  else if (outcome === 'loss') title = 'Magʻlubiyat';
+  else title = 'Durang';
   const moves = Math.ceil(S.chess.history().length / 2);
-  openModal(`<div class="result"><div class="big">${big}</div><h2>${title}</h2><p>${REASON[reason] || ''} · ${moves} yurish</p>
+  openModal(`<div class="result ${outcome}">${medallion(big)}<h2>${title}</h2><p>${REASON[reason] || ''}, ${moves} yurish</p>
     ${S.mode === 'ai' && outcome === 'win' && S.level < 3 ? `<p>Keyingi daraja: <b>${LEVELS[S.level + 1].name}</b> — sinab koʻrasizmi?</p>` : ''}
-    <button class="btn primary" id="rAgain">🔄 Yana oʻynash</button>
+    <button class="btn primary" id="rAgain">Yana oʻynash</button>
     ${S.mode === 'ai' && outcome === 'win' && S.level < 3 ? '<button class="btn" id="rNext">⬆️ Keyingi daraja</button>' : ''}
-    <button class="btn" id="rShare">📤 Doʻstlarga ulashish</button>
+    <button class="btn" id="rShare">${icon('send', 20)}Doʻstlarga yuborish</button>
     <button class="btn ghost" id="rHome">Bosh menyu</button></div>`);
   $('#rAgain').onclick = () => startGame(S.mode, S.level, S.mode === 'ai' ? (S.settings.lastColor === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : S.player) : 'w');
   const nx = $('#rNext'); if (nx) nx.onclick = () => startGame('ai', S.level + 1, S.player);
@@ -330,6 +332,7 @@ function showResult(outcome, reason, winner) {
 
 function goHome() {
   closeModal(); S.aiReq++;
+  scene.confetti.n = 0;
   leaveOnline();
   S.busy = false; S.selected = null; scene.clearSelection(); scene.clearHint();
   const wasOnline = S.mode === 'online';
@@ -365,7 +368,7 @@ async function doHint() {
   if (S.mode === 'online') return offerDraw();
   if (S.busy || !S.mode || S.over || !isHumanTurn()) return;
   if (!isPro() && S.hints >= FREE_HINTS) return upsell('Bepul maslahat tugadi (oʻyinda 1 ta).');
-  S.busy = true; toast('💡 Oʻylayapman…', 1200);
+  S.busy = true; toast('Eng yaxshi yurish izlanmoqda…', 1200);
   const r = await aiSearch(S.chess.fen(), { timeMs: 1200 });
   S.busy = false;
   if (r.ok && r.move) { S.hints++; scene.showHint(r.move.slice(0, 2), r.move.slice(2, 4)); updateHUD(); saveGame(); play('promote'); }
@@ -374,33 +377,33 @@ async function doHint() {
 function doResign() {
   if (S.mode === 'online') {
     if (S.over || !S.online.room || !S.online.room.you) return;
-    openModal(`<h2>Taslim boʻlasizmi? 🏳️</h2><p class="muted" style="text-align:center">Oʻyin magʻlubiyat sifatida yoziladi.</p>
+    openModal(`<h2>Taslim boʻlasizmi?</h2><p class="muted" style="text-align:center">Oʻyin magʻlubiyat sifatida yoziladi.</p>
       <button class="btn primary" id="yes">Ha, taslim</button><button class="btn ghost" data-close>Davom etish</button>`);
     $('#yes').onclick = () => { closeModal(); S.online.ws.send({ t: 'resign' }); };
     return;
   }
   if (S.busy || !S.mode || S.over) return;
   if (S.mode === 'friend') {
-    openModal(`<h2>Durang taklifi 🤝</h2><p class="muted" style="text-align:center">Ikkala oʻyinchi ham rozimi?</p>
+    openModal(`<h2>Durangga kelishasizmi?</h2><p class="muted" style="text-align:center">Ikkala oʻyinchi ham rozimi?</p>
       <button class="btn primary" id="yes">Ha, durang</button><button class="btn ghost" data-close>Yoʻq</button>`);
     $('#yes').onclick = () => { closeModal(); checkGameOver({ reason: 'agreed' }); };
   } else {
-    openModal(`<h2>Taslim boʻlasizmi? 🏳️</h2><p class="muted" style="text-align:center">Oʻyin magʻlubiyat sifatida yoziladi.</p>
+    openModal(`<h2>Taslim boʻlasizmi?</h2><p class="muted" style="text-align:center">Oʻyin magʻlubiyat sifatida yoziladi.</p>
       <button class="btn primary" id="yes">Ha, taslim</button><button class="btn ghost" data-close>Davom etish</button>`);
     $('#yes').onclick = () => { closeModal(); checkGameOver({ reason: 'resign', winner: S.player === 'w' ? 'b' : 'w' }); };
   }
 }
 
 function upsell(text) {
-  openModal(`<h2>🧠 PRO</h2><p class="muted" style="text-align:center">${text}<br>PRO bilan «Orqaga» va «Maslahat» cheksiz.</p>
-    <button class="btn primary" id="upBuy">PRO olish · ${ITEMS.find((i) => i.id === 'pro').price} ⭐</button>
-    <button class="btn" id="upShop">🎨 Doʻkonni ochish</button><button class="btn ghost" data-close>Yopish</button>`);
+  openModal(`<h2>PRO</h2><p class="muted" style="text-align:center">${text}<br>PRO bilan «Orqaga» va «Maslahat» cheksiz.</p>
+    <button class="btn primary" id="upBuy">PRO olish, ${ITEMS.find((i) => i.id === 'pro').price} ⭐</button>
+    <button class="btn" id="upShop">Doʻkonni ochish</button><button class="btn ghost" data-close>Yopish</button>`);
   $('#upBuy').onclick = () => buy(ITEMS.find((i) => i.id === 'pro'));
   $('#upShop').onclick = () => openShop();
 }
 
 // ───────────── onlayn oʻyin ─────────────
-const TCS = [['60+0', '⚡ 1 daq'], ['180+0', '🔥 3 daq'], ['180+2', '3 + 2'], ['300+0', '⏱ 5 daq'], ['600+0', '🕰 10 daq']];
+const TCS = [['60+0', '1 daqiqa'], ['180+0', '3 daqiqa'], ['180+2', '3 + 2 soniya'], ['300+0', '5 daqiqa'], ['600+0', '10 daqiqa']];
 const tcText = (tc) => (!tc || !tc.base ? 'Vaqtsiz' : `${tc.base / 60} daq${tc.inc ? ' + ' + tc.inc + ' s' : ''}`);
 const OREASON = { ...REASON, timeout: 'Vaqt tugadi', abandon: 'Oʻyinchi oʻyinni tashlab ketdi', aborted: 'Oʻyin bekor qilindi' };
 const EMOJIS = ['👍', '😂', '😮', '😡', '🤝', '🔥', '👏', '😎'];
@@ -414,13 +417,13 @@ function needOnline() {
 function openOnline() {
   if (!needOnline()) return;
   const me = S.me;
-  openModal(`<h2>🌐 Onlayn</h2>${me ? `<p class="muted" style="text-align:center">Reytingingiz: <b>${me.rating}</b> · ${me.games} oʻyin</p>` : ''}
-    <p class="muted">⚡ Tasodifiy raqib (reytingli)</p>
+  openModal(`<h2>Onlayn oʻyin</h2>${me ? `<p class="muted center">Reytingingiz ${me.rating}, oʻynalgan ${me.games}</p>` : ''}
+    <p class="muted">Tasodifiy raqib bilan, reytingga taʼsir qiladi</p>
     <div class="chips" id="tcQuick">${TCS.map(([v, l]) => `<button class="chip" data-tc="${v}">${l}</button>`).join('')}</div>
-    <p class="muted">🔗 Doʻstni havola orqali chaqirish</p>
-    <div class="chips" id="tcFriend">${[...TCS, ['0+0', '♾ Vaqtsiz']].map(([v, l]) => `<button class="chip ${v === '600+0' ? 'active' : ''}" data-tc="${v}">${l}</button>`).join('')}</div>
-    <button class="btn primary" id="btnInvite">🔗 Taklif havolasini yaratish</button>
-    <button class="btn" id="btnTop">🏆 Reyting jadvali</button><button class="btn ghost" data-close>Yopish</button>`);
+    <p class="muted">Doʻstni havola bilan chaqirish</p>
+    <div class="chips" id="tcFriend">${[...TCS, ['0+0', 'Vaqtsiz']].map(([v, l]) => `<button class="chip ${v === '600+0' ? 'active' : ''}" data-tc="${v}">${l}</button>`).join('')}</div>
+    <button class="btn primary" id="btnInvite">${icon('link', 20)}Havola yaratish</button>
+    <button class="btn" id="btnTop">${icon('trophy', 20)}Reyting jadvali</button><button class="btn ghost" data-close>Yopish</button>`);
   const c = $('#modalCard');
   c.querySelectorAll('#tcQuick .chip').forEach((b) => (b.onclick = () => startMatch(b.dataset.tc)));
   c.querySelectorAll('#tcFriend .chip').forEach((b) => (b.onclick = () => { c.querySelectorAll('#tcFriend .chip').forEach((x) => x.classList.toggle('active', x === b)); play('click'); }));
@@ -432,7 +435,7 @@ function startMatch(tc) {
   play('click');
   if (S.matchWs) S.matchWs.close();
   const t0 = Date.now();
-  openModal(`<div class="result"><div class="big searching">🔎</div><h2>Raqib qidirilmoqda…</h2>
+  openModal(`<div class="result searching">${medallion('♞')}<h2>Raqib izlanmoqda</h2>
     <p>${tcText({ base: +tc.split('+')[0], inc: +tc.split('+')[1] })} · <span id="mmT">0</span> s</p>
     <button class="btn ghost" id="mmCancel">Bekor qilish</button></div>`);
   const tick = setInterval(() => { const el = $('#mmT'); if (el) el.textContent = Math.floor((Date.now() - t0) / 1000); else clearInterval(tick); }, 500);
@@ -470,7 +473,7 @@ function joinRoom(id) {
   TG.setBack(() => goHome());
   scene.setInsets(78, 192); scene.setIdle(false); scene.clearSelection(); scene.clearHint();
   S.online.ws = new NET.Socket(`/ws/room/${id}`, onNetMsg, (st) => {
-    if (st === 'reconnecting') toast('📡 Qayta ulanmoqda…', 1500);
+    if (st === 'reconnecting') toast('Aloqa uzildi, qayta ulanmoqda…', 1500);
   });
   updateHUD();
 }
@@ -488,7 +491,7 @@ async function onNetMsg(m) {
     case 'draw_offer':
       if (m.by !== O.room.you && O.room.you) {
         play('check');
-        openModal(`<h2>🤝 Durang taklifi</h2><p class="muted" style="text-align:center">Raqibingiz durang taklif qilyapti.</p>
+        openModal(`<h2>Raqib durang taklif qildi</h2><p class="muted center">Qabul qilsangiz, oʻyin durang bilan tugaydi.</p>
           <button class="btn primary" id="dYes">Qabul qilish</button><button class="btn" id="dNo">Rad etish</button>`);
         $('#dYes').onclick = () => { closeModal(); O.ws.send({ t: 'draw_accept' }); };
         $('#dNo').onclick = () => { closeModal(); O.ws.send({ t: 'draw_decline' }); };
@@ -496,7 +499,7 @@ async function onNetMsg(m) {
       return;
     case 'draw_declined': if (m.by !== O.room.you) toast('Raqib durangni rad etdi'); return;
     case 'rematch_offer':
-      if (m.by !== O.room.you) { toast('🔄 Raqib revansh taklif qilyapti!', 3000); const b = $('#oRematch'); if (b) b.textContent = '🔄 Revanshni qabul qilish'; }
+      if (m.by !== O.room.you) { toast('Raqib revansh soʻrayapti', 3000); const b = $('#oRematch'); if (b) b.textContent = 'Revanshni qabul qilish'; }
       return;
     case 'emoji': return floatEmoji(m.by, m.e);
     case 'error': toast(m.msg || 'Xatolik'); return;
@@ -520,7 +523,7 @@ async function applyRoomState(room) {
     closeModal();
     scene.setOrientation(S.player);
     await scene.setBoard(c.board(), true);
-    if (newGame && prev) { play('castle'); flashStatus('Yangi oʻyin! ♟', 1200); }
+    if (newGame && prev) { play('castle'); flashStatus('Yangi oʻyin', 1200); }
   } else if (!same) {
     await scene.syncBoard(c.board());
   }
@@ -528,25 +531,25 @@ async function applyRoomState(room) {
   S.busy = false;
   if (room.status === 'waiting') showWaiting(room);
   else if (!S.over && !$('#modal').classList.contains('hidden') && $('#modalCard').dataset.kind === 'waiting') { closeModal(); play('promote'); flashStatus('Oʻyin boshlandi!', 1200); TG.haptic('success'); }
-  if (!room.you && room.status !== 'waiting') toast('👀 Siz tomoshabinsiz', 2500);
+  if (!room.you && room.status !== 'waiting') toast('Siz bu oʻyinni tomosha qilyapsiz', 2500);
   updateHUD();
 }
 
 function showWaiting(room) {
   const link = S.inviteLink || `https://t.me/${BOT_USERNAME}/play?startapp=r_${room.id}`;
-  openModal(`<div class="result"><div class="big searching">⏳</div><h2>Doʻstingiz kutilmoqda…</h2>
+  openModal(`<div class="result searching">${medallion('♞')}<h2>Doʻstingiz kutilmoqda</h2>
     <p>${tcText(room.tc)} · Havolani doʻstingizga yuboring</p>
-    <button class="btn primary" id="wShare">📤 Telegramda yuborish</button>
-    <button class="btn" id="wCopy">🔗 Havolani nusxalash</button>
+    <button class="btn primary" id="wShare">${icon('send', 20)}Telegramda yuborish</button>
+    <button class="btn" id="wCopy">${icon('link', 20)}Havolani nusxalash</button>
     <button class="btn ghost" id="wLeave">Bekor qilish</button></div>`);
   $('#modalCard').dataset.kind = 'waiting';
   $('#wShare').onclick = () => {
     const tg = window.Telegram && window.Telegram.WebApp;
     if (tg && tg.switchInlineQuery) { try { tg.switchInlineQuery('r_' + room.id, ['users', 'groups']); return; } catch (e) { /* pastga */ } }
-    if (tg && tg.openTelegramLink) tg.openTelegramLink('https://t.me/share/url?url=' + encodeURIComponent(link) + '&text=' + encodeURIComponent('♟ Keling, Shaxmat 3D da bellashamiz!'));
+    if (tg && tg.openTelegramLink) tg.openTelegramLink('https://t.me/share/url?url=' + encodeURIComponent(link) + '&text=' + encodeURIComponent('Keling, Shaxmat 3D da bir partiya oʻynaymiz'));
   };
   $('#wCopy').onclick = async () => {
-    try { await navigator.clipboard.writeText(link); toast('✅ Havola nusxalandi'); } catch (e) { toast(link, 5000); }
+    try { await navigator.clipboard.writeText(link); toast('Havola nusxalandi'); } catch (e) { toast(link, 5000); }
   };
   $('#wLeave').onclick = () => goHome();
 }
@@ -575,7 +578,7 @@ async function onOnlineOver(m) {
   const winner = m.result === '1-0' ? 'w' : m.result === '0-1' ? 'b' : null;
   const you = r.you;
   const outcome = !you ? 'watch' : !winner ? 'draw' : winner === you ? 'win' : 'loss';
-  if (m.reason === 'checkmate') { flashStatus('Mat! ♚', 1400); scene.checkmate(kingSquare(S.chess.turn()), winner); }
+  if (m.reason === 'checkmate') { flashStatus('Mat', 1400); scene.checkmate(kingSquare(S.chess.turn()), winner); }
   else if (winner) scene.checkmate(kingSquare(winner === 'w' ? 'b' : 'w'), winner);
   else if (m.reason !== 'aborted') scene.drawEffect([kingSquare('w'), kingSquare('b')]);
   play(outcome === 'win' ? 'win' : outcome === 'loss' ? 'lose' : 'draw');
@@ -583,12 +586,12 @@ async function onOnlineOver(m) {
   if (S.me && you && m.ratingDelta && m.ratingDelta[you] != null) S.me.rating += m.ratingDelta[you];
   await new Promise((res) => setTimeout(res, winner ? 1800 : 900));
   const d = you && m.ratingDelta ? m.ratingDelta[you] : null;
-  const big = m.reason === 'aborted' ? '🚫' : outcome === 'win' ? '🎉' : outcome === 'loss' ? '😔' : outcome === 'draw' ? '🤝' : '🏁';
+  const big = m.reason === 'aborted' ? '—' : m.result === '1-0' ? '1–0' : m.result === '0-1' ? '0–1' : '½–½';
   const title = m.reason === 'aborted' ? 'Bekor qilindi' : outcome === 'win' ? 'Gʻalaba!' : outcome === 'loss' ? 'Magʻlubiyat' : outcome === 'draw' ? 'Durang' : (winner === 'w' ? 'Oq' : winner === 'b' ? 'Qora' : 'Durang') + (winner ? ' yutdi' : '');
-  openModal(`<div class="result"><div class="big">${big}</div><h2>${title}</h2><p>${OREASON[m.reason] || ''}</p>
+  openModal(`<div class="result ${outcome}">${medallion(big)}<h2>${title}</h2><p>${OREASON[m.reason] || ''}</p>
     ${d != null ? `<p class="delta ${d >= 0 ? 'up' : 'down'}">Reyting: ${d >= 0 ? '+' : ''}${d}${S.me ? ' → ' + S.me.rating : ''}</p>` : ''}
-    ${you ? '<button class="btn primary" id="oRematch">🔄 Revansh</button>' : ''}
-    <button class="btn" id="oNew">🌐 Yangi raqib</button><button class="btn ghost" id="oHome">Bosh menyu</button></div>`);
+    ${you ? '<button class="btn primary" id="oRematch">Revansh</button>' : ''}
+    <button class="btn" id="oNew">${icon('globe', 20)}Yangi raqib</button><button class="btn ghost" id="oHome">Bosh menyu</button></div>`);
   const rb = $('#oRematch');
   if (rb) rb.onclick = () => { O.ws.send({ t: 'rematch' }); rb.textContent = '⏳ Raqib javobini kutish…'; rb.disabled = true; };
   $('#oNew').onclick = () => { goHome(); openOnline(); };
@@ -601,7 +604,7 @@ function offerDraw() {
   if (S.online.drawOffer === 'sent') return toast('Taklif yuborilgan');
   S.online.drawOffer = 'sent';
   S.online.ws.send({ t: 'draw_offer' });
-  toast('🤝 Durang taklifi yuborildi');
+  toast('Durang taklifi yuborildi');
 }
 
 function openEmoji() {
@@ -624,17 +627,25 @@ function floatEmoji(by, e) {
 
 async function openTop() {
   if (!needOnline()) return;
-  openModal('<h2>🏆 Reyting</h2><p class="muted" style="text-align:center">Yuklanmoqda…</p>');
+  openModal('<h2>Reyting</h2><p class="muted center">Yuklanmoqda…</p>');
   try {
     const [top, me] = await Promise.all([NET.api('/api/top'), NET.api('/api/me')]);
     S.me = me;
-    const medals = ['🥇', '🥈', '🥉'];
-    openModal(`<h2>🏆 Reyting</h2><table class="stats"><tr><th>#</th><th>Oʻyinchi</th><th>Reyting</th><th>Oʻyin</th></tr>
+    const medals = [];
+    openModal(`<h2>Reyting</h2><table class="stats"><tr><th>#</th><th>Oʻyinchi</th><th>Reyting</th><th>Oʻyin</th></tr>
       ${top.slice(0, 50).map((u, i) => `<tr><td>${medals[i] || i + 1}</td><td style="text-align:left">${escapeHtml(u.name)}</td><td>${u.rating}</td><td>${u.games}</td></tr>`).join('') || '<tr><td colspan="4">Hali reytingli oʻyinlar yoʻq</td></tr>'}</table>
       <p class="muted" style="text-align:center">Siz: <b>${me.rating}</b> · ${me.wins} gʻalaba · ${me.losses} magʻlubiyat · ${me.draws} durang</p>
-      <button class="btn primary" id="tPlay">⚡ Reytingli oʻyin</button><button class="btn ghost" data-close>Yopish</button>`);
+      <button class="btn primary" id="tPlay">Reytingli oʻyin boshlash</button><button class="btn ghost" data-close>Yopish</button>`);
     $('#tPlay').onclick = () => openOnline();
   } catch (e) { toast('Reytingni yuklab boʻlmadi'); closeModal(); }
+}
+
+function swatch(it) {
+  if (it.type === 'theme') {
+    const th = THEMES[it.key] || THEMES.klassik, c = (n) => '#' + n.toString(16).padStart(6, '0');
+    return `<div class="sw" style="background:linear-gradient(90deg, ${c(th.light.color)} 0 50%, ${c(th.dark.color)} 50%);box-shadow:inset 0 -7px 0 ${c(th.frame)}"></div>`;
+  }
+  return `<div class="sw sw-ic">${icon({ effect: 'bolt', pro: 'hint', bundle: 'trophy' }[it.type] || 'bolt', 22)}</div>`;
 }
 
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch])); }
@@ -670,7 +681,8 @@ function openLevels() {
     const b = document.createElement('button');
     b.className = 'chip' + (l.id === (S.settings.lastLevel ?? 1) ? ' active' : '');
     const s = st['l' + l.id];
-    b.innerHTML = `${l.emoji} ${l.name}<small>${s ? `${s.w} gʻalaba · ${s.l} magʻlubiyat` : 'yangi'}</small>`;
+    b.classList.add('stack');
+    b.innerHTML = `${l.name}<small>${s ? `${s.w} gʻalaba, ${s.l} magʻlubiyat` : 'hali oʻynalmagan'}</small>`;
     b.onclick = () => { box.querySelectorAll('.chip').forEach((c) => c.classList.remove('active')); b.classList.add('active'); S.settings.lastLevel = l.id; play('click'); };
     box.appendChild(b);
   });
@@ -694,9 +706,9 @@ function openShop() {
   const card = (it, sel, preview) => {
     const have = owns(it);
     return `<div class="item ${sel ? 'sel' : ''} ${it.type === 'bundle' || it.type === 'pro' ? 'wide' : ''}">
-      ${have ? '' : '<span class="lock">🔒</span>'}<div class="em">${it.emoji}</div><div class="nm">${it.name}</div>
-      <div class="pr">${have ? (sel ? '✅ Tanlangan' : 'Sizda bor') : it.price + ' ⭐'}</div>
-      <div class="acts">${preview ? `<button data-prev="${it.id}">👁 Koʻrish</button>` : ''}
+      ${swatch(it)}<div class="nm">${it.name}</div>
+      <div class="pr">${have ? (sel ? 'Tanlangan' : 'Sizda bor') : icon('lock', 13) + it.price + ' ⭐'}</div>
+      <div class="acts">${preview ? `<button data-prev="${it.id}">Koʻrish</button>` : ''}
       ${have ? (preview && !sel ? `<button data-use="${it.id}">Tanlash</button>` : '') : `<button class="buy" data-buy="${it.id}">⭐ ${it.price}</button>`}</div></div>`;
   };
   const free = [{ id: 'free_theme', type: 'theme', key: 'klassik', name: THEMES.klassik.name, emoji: '🪵', free: true },
@@ -704,7 +716,7 @@ function openShop() {
   const all = [...free, ...ITEMS];
   const render = () => {
     const th = all.filter((i) => i.type === 'theme'), fx = all.filter((i) => i.type === 'effect');
-    openModal(`<h2>🎨 Doʻkon</h2>
+    openModal(`<h2>Doʻkon</h2>
       <div class="shop-sec">Mavzular</div><div class="items">${th.map((i) => card(i, i.key === S.settings.theme, true)).join('')}</div>
       <div class="shop-sec">Urish effektlari</div><div class="items">${fx.map((i) => card(i, i.key === S.settings.effect, true)).join('')}</div>
       <div class="shop-sec">Imkoniyatlar</div><div class="items">${card(ITEMS.find((i) => i.id === 'pro'), false, false)}${card(ITEMS.find((i) => i.id === 'bundle_all'), false, false)}</div>
@@ -713,8 +725,8 @@ function openShop() {
     const card$ = $('#modalCard');
     card$.querySelectorAll('[data-prev]').forEach((b) => (b.onclick = () => {
       const it = all.find((i) => i.id === b.dataset.prev);
-      if (it.type === 'theme') { scene.applyTheme(it.key); toast('👁 ' + it.name + ' — oldindan koʻrish'); }
-      else { scene.setEffect(it.key); demoEffect(); toast('👁 ' + it.name + ' — urishda koʻrinadi'); }
+      if (it.type === 'theme') { scene.applyTheme(it.key); toast(it.name + ' doskada koʻrsatildi'); }
+      else { scene.setEffect(it.key); demoEffect(); toast(it.name + ': dona olinganda koʻrinadi'); }
       play('click');
     }));
     card$.querySelectorAll('[data-use]').forEach((b) => (b.onclick = () => { use(all.find((i) => i.id === b.dataset.use)); render(); }));
@@ -737,7 +749,7 @@ async function buy(it, rerender) {
   const status = await TG.openInvoice(url);
   if (status === 'paid') {
     S.owned.add(it.id); saveOwned();
-    toast('🎉 Rahmat! ' + it.name + ' ochildi');
+    toast(it.name + ' ochildi. Rahmat!');
     if (it.type === 'theme' || it.type === 'effect') use(it);
     updateHUD();
     if (rerender) rerender();
@@ -758,10 +770,10 @@ async function demoEffect() {
 // ───────────── sozlamalar va statistika ─────────────
 function openSettings() {
   const sw = (k, label) => `<div class="set"><span>${label}</span><button class="switch ${S.settings[k] ? 'on' : ''}" data-k="${k}"></button></div>`;
-  openModal(`<h2>⚙️ Sozlamalar</h2>
-    ${sw('sound', '🔊 Ovoz')}${sw('haptics', '📳 Tebranish')}${sw('dots', '🎯 Mumkin yurishlarni koʻrsatish')}
-    ${sw('view2D', '🗺 2D koʻrinish (tepadan)')}${sw('autoRotate', '🔄 Doʻst bilan: doskani aylantirish')}${sw('coords', '🔤 Koordinatalar')}
-    <div class="set"><span>🎮 Grafika</span><div class="seg">${[['low', 'Past'], ['mid', 'Oʻrta'], ['high', 'Yuqori']].map(([v, l]) => `<button data-q="${v}" class="${S.settings.quality === v ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+  openModal(`<h2>Sozlamalar</h2>
+    ${sw('sound', 'Ovoz')}${sw('haptics', 'Tebranish')}${sw('dots', 'Mumkin yurishlarni koʻrsatish')}
+    ${sw('view2D', 'Doskaga tepadan qarash')}${sw('autoRotate', 'Bir telefonda: doskani navbatga qarab burish')}${sw('coords', 'Koordinatalar')}
+    <div class="set"><span>Grafika sifati</span><div class="seg">${[['low', 'Past'], ['mid', 'Oʻrta'], ['high', 'Yuqori']].map(([v, l]) => `<button data-q="${v}" class="${S.settings.quality === v ? 'on' : ''}">${l}</button>`).join('')}</div></div>
     <button class="btn ghost" data-close>Yopish</button>`);
   const c = $('#modalCard');
   c.querySelectorAll('.switch').forEach((b) => (b.onclick = () => {
@@ -783,14 +795,16 @@ function applySettings(k) {
 
 function openStats() {
   const row = (label, s) => `<tr><td>${label}</td><td>${s ? s.w : 0}</td><td>${s ? s.l : 0}</td><td>${s ? s.d : 0}</td></tr>`;
-  openModal(`<h2>📊 Statistika</h2><table class="stats"><tr><th>Rejim</th><th>Gʻ</th><th>M</th><th>D</th></tr>
-    ${LEVELS.map((l) => row(`${l.emoji} ${l.name}`, S.stats['l' + l.id])).join('')}
-    ${row('👥 Doʻst bilan', S.stats.friend ? { w: S.stats.friend.w, l: '–', d: S.stats.friend.d } : null)}</table>
+  openModal(`<h2>Natijalar</h2><table class="stats"><tr><th>Rejim</th><th>Gʻ</th><th>M</th><th>D</th></tr>
+    ${LEVELS.map((l) => row(l.name, S.stats['l' + l.id])).join('')}
+    ${row('Bir telefonda', S.stats.friend ? { w: S.stats.friend.w, l: '–', d: S.stats.friend.d } : null)}</table>
     <p class="muted" style="text-align:center">Gʻ — gʻalaba, M — magʻlubiyat, D — durang</p><button class="btn ghost" data-close>Yopish</button>`);
 }
 
 // ───────────── ishga tushirish ─────────────
 async function init() {
+  document.querySelectorAll('[data-ic]').forEach((el) => (el.innerHTML = icon(el.dataset.ic)));
+  document.querySelectorAll('[data-medal]').forEach((el) => (el.innerHTML = medallion(el.dataset.medal, 74)));
   TG.initTelegram();
   const [settings, owned, stats, game] = await Promise.all([TG.storeGet('settings'), TG.storeGet('owned'), TG.storeGet('stats'), TG.storeGet('game')]);
   S.settings = { ...DEFAULTS, ...(settings || {}) };
@@ -853,8 +867,8 @@ async function init() {
   $('#tResign').onclick = doResign;
   $('#tView').onclick = () => { S.settings.view2D = !S.settings.view2D; applySettings('view2D'); saveSettings(); play('click'); };
   $('#tMenu').onclick = () => {
-    openModal(`<h2>Menyu</h2><button class="btn" id="mNew">🔄 Yangi oʻyin</button><button class="btn" id="mShop">🎨 Doʻkon</button>
-      <button class="btn" id="mSet">⚙️ Sozlamalar</button><button class="btn" id="mHome">🏠 Bosh menyu</button><button class="btn ghost" data-close>Yopish</button>`);
+    openModal(`<h2>Menyu</h2><button class="btn" id="mNew">Yangi oʻyin</button><button class="btn" id="mShop">${icon('bag', 20)}Doʻkon</button>
+      <button class="btn" id="mSet">${icon('gear', 20)}Sozlamalar</button><button class="btn" id="mHome">Bosh menyu</button><button class="btn ghost" data-close>Yopish</button>`);
     $('#mNew').onclick = () => startGame(S.mode, S.level, S.player);
     $('#mShop').onclick = () => openShop();
     $('#mSet').onclick = () => openSettings();

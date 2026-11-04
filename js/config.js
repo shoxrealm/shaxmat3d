@@ -16,7 +16,7 @@ export const LEVELS = [
 export const THEMES = {
   klassik: {
     name: 'Klassik yogʻoch', free: true,
-    bg: 0x2a1d14, fog: 0x2a1d14, board: 'wood', frame: 0x5a3a22, frameMetal: 0.1, label: '#f3dfbf',
+    bg: 0x0E1A2E, fog: 0x0E1A2E, board: 'wood', frame: 0x5a3a22, frameMetal: 0.1, label: '#f3dfbf',
     light: { color: 0xd9bf94, roughness: 0.45, metalness: 0.0, clearcoat: 0.5 },
     dark: { color: 0x3b2416, roughness: 0.38, metalness: 0.0, clearcoat: 0.7 },
     accent: 0xffc36b,

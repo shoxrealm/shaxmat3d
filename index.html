@@ -3,8 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#0b0a12">
+<meta name="theme-color" content="#0E1A2E">
 <title>Shaxmat 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant:ital,wght@0,600;0,700;1,600&family=Onest:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="css/style.css">
 <script src="https://telegram.org/js/telegram-web-app.js?57"></script>
 <script type="importmap">
@@ -17,59 +20,68 @@
 <body>
 <div id="stage"></div>
 
-<div id="loading"><div class="spinner"></div><p>Shaxmat 3D yuklanmoqda…</p></div>
+<div id="loading">
+  <div class="load-mark" data-medal="♞"></div>
+  <p>Doska tayyorlanmoqda…</p>
+</div>
 
 <!-- Bosh menyu -->
 <section id="home" class="screen hidden">
-  <div class="logo"><span class="crown">♛</span><h1>Shaxmat <b>3D</b></h1><p>Premium animatsiyali shaxmat</p></div>
-  <div class="menu">
-    <button id="btnContinue" class="btn primary hidden">▶️ Davom ettirish</button>
-    <button id="btnAI" class="btn primary">🤖 Kompyuterga qarshi</button>
-    <button id="btnFriend" class="btn">👥 Doʻst bilan <small>(bitta telefonda)</small></button>
-    <button id="btnOnline" class="btn">🌐 Onlayn <span class="badge">yangi</span></button>
-    <div class="row">
-      <button id="btnShop" class="btn small">🎨 Doʻkon</button>
-      <button id="btnStats" class="btn small">📊 Statistika</button>
-      <button id="btnSettings" class="btn small">⚙️</button>
+  <header class="brand">
+    <div class="brand-medal" data-medal="♞"></div>
+    <h1 class="wordmark">Shaxmat</h1>
+    <p class="tagline">uch oʻlchamli doska, jonli donalar</p>
+  </header>
+  <nav class="menu">
+    <button id="btnContinue" class="row-btn resume hidden"><span class="row-ic" data-ic="play"></span><span class="row-t">Oʻyinni davom ettirish<small>Toʻxtagan joyingizdan</small></span></button>
+    <button id="btnAI" class="row-btn lead"><span class="row-ic" data-ic="chip"></span><span class="row-t">Kompyuterga qarshi<small>Toʻrt daraja: boshlovchidan ustagacha</small></span></button>
+    <div class="row-group">
+      <button id="btnOnline" class="row-btn"><span class="row-ic" data-ic="globe"></span><span class="row-t">Onlayn oʻyin<small>Reyting yoki doʻstni havola bilan chaqirish</small></span></button>
+      <button id="btnFriend" class="row-btn"><span class="row-ic" data-ic="pair"></span><span class="row-t">Bir telefonda ikki kishi<small>Navbatma-navbat oʻynash</small></span></button>
     </div>
-  </div>
+    <div class="foot">
+      <button id="btnShop" class="foot-btn"><span data-ic="bag"></span>Doʻkon</button>
+      <button id="btnStats" class="foot-btn"><span data-ic="chart"></span>Natijalar</button>
+      <button id="btnSettings" class="foot-btn"><span data-ic="gear"></span>Sozlamalar</button>
+    </div>
+  </nav>
 </section>
 
 <!-- Daraja tanlash -->
 <section id="levelSheet" class="sheet hidden">
   <div class="card">
     <h2>Kompyuterga qarshi</h2>
-    <p class="muted">Daraja</p>
+    <p class="muted">Raqib kuchi</p>
     <div id="levels" class="chips"></div>
-    <p class="muted">Rangingiz</p>
-    <div id="colors" class="chips">
-      <button data-c="w" class="chip">⚪ Oq</button>
-      <button data-c="r" class="chip active">🎲 Tasodifiy</button>
-      <button data-c="b" class="chip">⚫ Qora</button>
+    <p class="muted">Siz qaysi rangda oʻynaysiz</p>
+    <div id="colors" class="chips three">
+      <button data-c="w" class="chip"><i class="stone w"></i>Oq</button>
+      <button data-c="r" class="chip active"><i class="stone r"></i>Tasodifiy</button>
+      <button data-c="b" class="chip"><i class="stone b"></i>Qora</button>
     </div>
-    <button id="btnStartAI" class="btn primary">Boshlash</button>
+    <button id="btnStartAI" class="btn primary">Oʻyinni boshlash</button>
     <button class="btn ghost" data-close>Bekor qilish</button>
   </div>
 </section>
 
 <!-- Oʻyin HUD -->
 <section id="hud" class="hidden">
-  <div id="barTop" class="pbar top"><div class="ava">🤖</div><div class="pinfo"><div class="pname"></div><div class="caps"></div></div><div class="think hidden">oʻylayapti<span>.</span><span>.</span><span>.</span></div><div class="adv"></div></div>
-  <div id="barBottom" class="pbar bottom"><div class="ava">🙂</div><div class="pinfo"><div class="pname"></div><div class="caps"></div></div><div class="think hidden">oʻylayapti<span>.</span><span>.</span><span>.</span></div><div class="adv"></div></div>
+  <div id="barTop" class="pbar top"><i class="ava"></i><div class="pinfo"><div class="pname"></div><div class="caps"></div></div><div class="think hidden">oʻylayapti</div><div class="adv"></div></div>
+  <div id="barBottom" class="pbar bottom"><i class="ava"></i><div class="pinfo"><div class="pname"></div><div class="caps"></div></div><div class="think hidden">oʻylayapti</div><div class="adv"></div></div>
   <div id="moves" class="moves"></div>
   <div class="tools">
-    <button id="tUndo" class="tool"><i>↶</i><span>Orqaga</span><em></em></button>
-    <button id="tHint" class="tool"><i>💡</i><span>Maslahat</span><em></em></button>
-    <button id="tView" class="tool"><i>🧭</i><span>Koʻrinish</span></button>
-    <button id="tResign" class="tool"><i>🏳️</i><span>Taslim</span></button>
-    <button id="tMenu" class="tool"><i>☰</i><span>Menyu</span></button>
+    <button id="tUndo" class="tool"><i data-ic="undo"></i><span>Orqaga</span><em></em></button>
+    <button id="tHint" class="tool"><i data-ic="hint"></i><span>Maslahat</span><em></em></button>
+    <button id="tView" class="tool"><i data-ic="view"></i><span>Koʻrinish</span></button>
+    <button id="tResign" class="tool"><i data-ic="flag"></i><span>Taslim</span></button>
+    <button id="tMenu" class="tool"><i data-ic="menu"></i><span>Menyu</span></button>
   </div>
   <div id="status" class="status hidden"></div>
 </section>
 
 <!-- Modallar -->
 <section id="modal" class="sheet hidden"><div class="card" id="modalCard"></div></section>
-<div id="toast" class="toast hidden"></div>
+<div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
 <script type="module" src="js/main.js"></script>
 </body>
