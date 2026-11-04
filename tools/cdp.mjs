@@ -52,7 +52,19 @@ try {
   await send('Page.navigate', { url });
   await sleep(9000);
   await snap('home');
-  if (scenario === 'tap') {
+  if (scenario === 'captures') {
+    await ev(`document.querySelector('#home').classList.add('hidden'); __s3d.scene.setIdle(false); __s3d.scene.setInsets(40, 40); __s3d.scene.setOrientation('w', false)`);
+    const cases = [['k7/8/8/3p4/4P3/8/8/7K w - - 0 1', 'exd5'], ['k7/8/8/3p4/8/4N3/8/7K w - - 0 1', 'Nxd5'], ['k7/8/8/3p4/8/8/6B1/7K w - - 0 1', 'Bxd5'],
+      ['k7/8/8/3p4/8/8/8/3R3K w - - 0 1', 'Rxd5'], ['k7/8/8/3p4/8/8/8/3Q3K w - - 0 1', 'Qxd5'], ['k7/8/8/8/8/8/3p4/4K3 w - - 0 1', 'Kxd2']];
+    for (const [fen, san] of cases) for (let rep = 0; rep < 2; rep++) {
+      await ev(`(async () => { const { Chess } = await import('./js/vendor/chess.js'); const c = new Chess('${fen}'); await __s3d.scene.setBoard(c.board()); window.__mv = c.move('${san}'); })()`);
+      await sleep(600);
+      ev(`__s3d.scene.animateMove(window.__mv)`);
+      await sleep(san[0] === 'N' ? 900 : 750); await snap(`${san}_${rep}_a_` + await ev('__s3d.scene.lastStyle'));
+      await sleep(350); await snap(`${san}_${rep}_b`);
+      await sleep(1500);
+    }
+  } else if (scenario === 'tap') {
     await ev(`document.querySelector('#btnFriend').click()`); await sleep(8000);
     logs.push('BUSY ' + await ev('__s3d.S.busy') + ' fps-check');
     const t0 = Date.now(); await ev('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))'); logs.push('2 frames ms ' + (Date.now()-t0));

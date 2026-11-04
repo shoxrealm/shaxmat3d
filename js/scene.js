@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -133,8 +133,27 @@ function buildGeometries(seg = 40) {
   knightHead.rotateY(Math.PI / 4); // raqib tomonga qiya qaraydi — profil koʻrinadi
   G.n = mergeGeometries([lathe([...BASE, V(0.29, 0.18), V(0.27, 0.23), V(0, 0.23)], seg), knightHead]);
 
-  for (const k in G) { G[k].computeVertexNormals(); G[k].computeBoundingBox(); }
+  // silliq normallar (asosiy) va toʻliq payvandlangan kontur geometriyasi (qora chegara uchun)
+  const OUT = {};
+  for (const k in G) {
+    const base = G[k];
+    const g = base.clone(); g.deleteAttribute('normal');
+    G[k] = mergeVertices(g, 1e-4); G[k].computeVertexNormals(); G[k].computeBoundingBox();
+    const o = base.clone(); o.deleteAttribute('normal'); o.deleteAttribute('uv');
+    OUT[k] = mergeVertices(o, 1e-4); OUT[k].computeVertexNormals();
+  }
+  G.outline = OUT;
   return G;
+}
+
+// Kontur: orqa tomoni koʻrinadigan, normal boʻylab biroz kattalashtirilgan qora qobiq
+function outlineMaterial(color, width) {
+  const m = new THREE.MeshBasicMaterial({ color, side: THREE.BackSide });
+  m.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>\n transformed += normalize(normal) * ${width.toFixed(4)};`);
+  };
+  m.customProgramCacheKey = () => 'outline' + width;
+  return m;
 }
 
 // ───────────── protsedural teksturalar ─────────────
@@ -174,7 +193,7 @@ function boardTexture(style, size) {
   let emissive = null;
   if (style === 'wood') {
     each((i, j, px, py, light) => {
-      x.fillStyle = light ? '#efc68f' : '#8a5230'; x.fillRect(px, py, q, q);
+      x.fillStyle = light ? '#d6aa70' : '#6b3d20'; x.fillRect(px, py, q, q);
       x.globalAlpha = 0.18;
       for (let k = 0; k < 18; k++) {
         x.strokeStyle = light ? '#b98d5c' : '#3f2414'; x.lineWidth = 1 + r() * 2; x.beginPath();
@@ -188,7 +207,7 @@ function boardTexture(style, size) {
       x.globalAlpha = 1;
     });
   } else if (style === 'marble') {
-    const L = marbleTexture('#f4f1ec', '#9a9aa6', 3, 256).image, D = marbleTexture('#26262c', '#8c7a55', 5, 256).image;
+    const L = marbleTexture('#dedad2', '#8a8a96', 3, 256).image, D = marbleTexture('#26262c', '#8c7a55', 5, 256).image;
     each((i, j, px, py, light) => x.drawImage(light ? L : D, ((i * 37) % 4) * 32, ((j * 53) % 4) * 32, 128, 128, px, py, q, q));
     x.strokeStyle = 'rgba(214,180,110,.55)'; x.lineWidth = size / 512;
     for (let i = 0; i <= 8; i++) { x.beginPath(); x.moveTo(i * q, 0); x.lineTo(i * q, size); x.moveTo(0, i * q); x.lineTo(size, i * q); x.stroke(); }
@@ -228,16 +247,23 @@ function boardTexture(style, size) {
     });
   } else if (style === 'samarqand') {
     each((i, j, px, py, light) => {
-      x.fillStyle = light ? '#e9dcc0' : '#174f8a'; x.fillRect(px, py, q, q);
+      x.fillStyle = light ? '#d6c6a2' : '#123f70'; x.fillRect(px, py, q, q);
       const cx = px + q / 2, cy = py + q / 2;
       drawStar8(x, cx, cy, q * 0.42);
-      x.fillStyle = light ? '#3fb8b0' : '#1f7dbf'; x.fill();
+      x.fillStyle = light ? '#2f9a93' : '#1a68a0'; x.fill();
       x.lineWidth = q * 0.035; x.strokeStyle = '#d6ae55'; x.stroke();
       drawStar8(x, cx, cy, q * 0.2); x.fillStyle = light ? '#f6efe0' : '#0d335e'; x.fill(); x.stroke();
       x.beginPath(); x.arc(cx, cy, q * 0.06, 0, Math.PI * 2); x.fillStyle = '#d6ae55'; x.fill();
       x.strokeStyle = 'rgba(214,174,85,.7)'; x.lineWidth = q * 0.02; x.strokeRect(px + q * 0.03, py + q * 0.03, q * 0.94, q * 0.94);
     });
   }
+  // kataklar orasida ingichka qora chiziq va doska atrofida qalin qora chegara
+  if (style !== 'neon') {
+    x.strokeStyle = 'rgba(0,0,0,.5)'; x.lineWidth = Math.max(1.5, size / 650);
+    for (let i = 1; i < 8; i++) { x.beginPath(); x.moveTo(i * q, 0); x.lineTo(i * q, size); x.moveTo(0, i * q); x.lineTo(size, i * q); x.stroke(); }
+  }
+  x.strokeStyle = style === 'neon' ? '#000' : 'rgba(8,6,4,.92)'; x.lineWidth = size / 110;
+  x.strokeRect(0, 0, size, size);
   const map = new THREE.CanvasTexture(c); map.colorSpace = THREE.SRGBColorSpace; map.anisotropy = 8;
   return { map, emissive };
 }
@@ -350,7 +376,7 @@ export class Scene3D {
     const r = this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     r.outputColorSpace = THREE.SRGBColorSpace;
     r.toneMapping = THREE.ACESFilmicToneMapping;
-    r.toneMappingExposure = 1.05;
+    r.toneMappingExposure = 0.85;
     r.shadowMap.enabled = true;
     r.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(r.domElement);
@@ -463,11 +489,16 @@ export class Scene3D {
     tm.needsUpdate = true;
     this.labels.material.map = labelTexture(th.label || '#f3dfbf', this.orientation === 'b');
     this.labels.material.needsUpdate = true;
-    this.scene.environmentIntensity = th.board === 'neon' ? 0.35 : 1.0;
-    this.hemi.intensity = th.board === 'neon' ? 0.15 : 0.5;
-    this.sun.intensity = th.board === 'neon' ? 0.6 : 1.6;
+    this.scene.environmentIntensity = th.board === 'neon' ? 0.3 : (th.env ?? 0.6);
+    this.hemi.intensity = th.board === 'neon' ? 0.12 : 0.28;
+    this.sun.intensity = th.board === 'neon' ? 0.55 : 1.25;
     this.mats = { w: this._mat(th.light), b: this._mat(th.dark) };
-    for (const m of this.pieces.values()) m.material = this.mats[m.userData.color];
+    if (this.outlineMat) this.outlineMat.dispose();
+    this.outlineMat = outlineMaterial(th.outline ?? 0x050505, th.outlineWidth ?? 0.016);
+    for (const m of this.pieces.values()) {
+      m.material = this.mats[m.userData.color];
+      const ol = m.getObjectByName('outline'); if (ol) ol.material = this.outlineMat;
+    }
     this.selRing.material.color = new THREE.Color(th.accent);
     this._setupBloom();
     this._seedAmbient();
@@ -551,6 +582,7 @@ export class Scene3D {
   _applySpherical(s) { this.camera.position.copy(new THREE.Vector3().setFromSpherical(s).add(this.controls.target)); this.camera.lookAt(this.controls.target); }
 
   setOrientation(color, animate = true) {
+    this.orbitId = (this.orbitId || 0) + 1; // davom etayotgan aylanishni toʻxtatadi
     this.orientation = color;
     this.labels.material.map = labelTexture(this.theme.label || '#f3dfbf', color === 'b');
     this.labels.material.needsUpdate = true;
@@ -575,8 +607,8 @@ export class Scene3D {
   }
 
   async orbitShow(dur = 5000, amount = Math.PI * 0.5) {
-    const s = this._spherical(), t0 = s.theta;
-    await tween(dur, (k) => { s.theta = t0 + amount * Math.sin(k * Math.PI); this._applySpherical(s); }, ease.linear);
+    const s = this._spherical(), t0 = s.theta, id = ++this.orbitId;
+    await tween(dur, (k) => { if (id !== this.orbitId) return; s.theta = t0 + amount * Math.sin(k * Math.PI); this._applySpherical(s); }, ease.linear);
   }
 
   setIdle(on) { this.controls.autoRotate = on; this.controls.autoRotateSpeed = 0.6; }
@@ -589,6 +621,9 @@ export class Scene3D {
     m.position.set(x, 0.006, z);
     if (color === 'b') m.rotation.y = Math.PI;
     m.userData = { type, color, square: sq };
+    const ol = new THREE.Mesh(this.geos.outline[type], this.outlineMat);
+    ol.name = 'outline'; ol.raycast = () => {};
+    m.add(ol);
     this.piecesGroup.add(m);
     return m;
   }
@@ -600,6 +635,9 @@ export class Scene3D {
   /** board — chess.js board() natijasi (8x8, [0] = 8-qator). */
   setBoard(board, intro = false) {
     for (const m of this.pieces.values()) this._removePiece(m);
+    this.confetti.n = 0; this.sparks.n = 0; this.dust.n = 0;
+    for (const f of this.fragments) if (f.parent) f.parent.remove(f);
+    this.fragments = []; this._clearMarks('draw'); this.setCheck(null);
     this.pieces.clear();
     const jobs = [];
     board.forEach((row, ri) => row.forEach((p, fi) => {
@@ -701,6 +739,7 @@ export class Scene3D {
     const { x, z } = sqToXZ(mv.to);
     const to = new THREE.Vector3(x, 0.006, z);
     const from = mesh.position.clone();
+    mesh.userData.from = from.clone();
     const dist = from.distanceTo(to);
     const isKnight = mv.piece === 'n';
     const h = opts.dropped ? 0.15 : isKnight ? 1.0 : victim ? 0.55 : 0.32;
@@ -734,11 +773,110 @@ export class Scene3D {
     const fx = this.effect;
     if (fx === 'olov') return this._burn(victim);
     if (fx === 'chaqmoq') return this._lightning(victim);
-    this._shatter(victim, fx === 'yulduz' ? 0xffe27a : this.theme.accent);
+    // har bir dona oʻziga xos uslubda oladi; ketma-ket bir xil boʻlmasligi uchun tasodifiy almashadi
+    const STYLES = { p: ['kick', 'shatter'], n: ['stomp', 'kick'], b: ['slice', 'vortex'], r: ['crush', 'shatter'], q: ['vortex', 'blast'], k: ['push', 'slice'] };
+    const opts = STYLES[attacker.userData.type] || ['shatter'];
+    let style = opts[Math.floor(Math.random() * opts.length)];
+    if (style === this.lastStyle && opts.length > 1) style = opts.find((s) => s !== style);
+    this.lastStyle = style;
+    const dir = new THREE.Vector3().subVectors(victim.position, attacker.userData.from || victim.position).setY(0);
+    if (dir.lengthSq() < 1e-4) dir.set(0, 0, attacker.userData.color === 'w' ? -1 : 1);
+    dir.normalize();
+    const col = fx === 'yulduz' ? 0xffe27a : this.theme.accent;
+    switch (style) {
+      case 'kick': return this._kick(victim, dir, 1);
+      case 'push': return this._kick(victim, dir, 0.35);
+      case 'stomp': return this._stomp(victim, col);
+      case 'slice': return this._slice(victim, dir, col);
+      case 'vortex': return this._vortex(victim, col);
+      case 'crush': this.shake = 0.25; return this._shatter(victim, col, 1.6);
+      case 'blast': return this._blast(victim, col);
+      default: return this._shatter(victim, col);
+    }
   }
 
-  _shatter(victim, sparkColor) {
-    const n = this.quality === 'low' ? 8 : 20;
+  /** Urib uchirib yuborish: dona aylanib doskadan tashqariga uchadi. */
+  _kick(victim, dir, power) {
+    victim.castShadow = true;
+    victim.userData.kicked = true;
+    const sp = 3.2 + 2.2 * power;
+    victim.userData.v = new THREE.Vector3(dir.x * sp, 2.2 + 3.2 * power, dir.z * sp);
+    victim.userData.w = new THREE.Vector3((Math.random() - 0.5) * 14 * power + dir.z * 8, (Math.random() - 0.5) * 6, -dir.x * 8 * power);
+    victim.userData.life = 2.2;
+    this.fragments.push(victim);
+    this._dustPuff(victim.position, 8);
+    this._flash(victim.position, 0xffffff, 2);
+  }
+
+  /** Ot bosib yassilaydi: dona yassilanib, chang boʻlib yoʻqoladi. */
+  async _stomp(victim, col) {
+    const p = victim.position;
+    this.shake = 0.2;
+    await tween(160, (k) => victim.scale.set(1 + 0.5 * k, Math.max(0.06, 1 - 0.94 * k), 1 + 0.5 * k), ease.outCubic);
+    this._dustPuff(p, 18);
+    for (let i = 0; i < 24; i++) {
+      const a = (i / 24) * Math.PI * 2;
+      this.sparks.spawn({ p: { x: p.x, y: 0.05, z: p.z }, v: { x: Math.cos(a) * 2.4, y: 0.2, z: Math.sin(a) * 2.4 }, color: col, size: 0.07, life: 0.5, drag: 2.5 });
+    }
+    await tween(380, (k) => victim.scale.set(1.5 * (1 - k) + 0.01, 0.06, 1.5 * (1 - k) + 0.01), ease.inOutCubic);
+    this._removePiece(victim);
+  }
+
+  /** Fil kesib oʻtadi: yorqin kesik chizigʻi, dona qiyshayib doskaga botadi. */
+  async _slice(victim, dir, col) {
+    const p = victim.position.clone();
+    const slash = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.05), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    slash.position.set(p.x, 0.65, p.z);
+    slash.lookAt(this.camera.position); slash.rotateZ(Math.PI / 4);
+    this.scene.add(slash);
+    this._flash(p, col, 3);
+    for (let i = 0; i < 20; i++) {
+      const t = (Math.random() - 0.5) * 1.2;
+      this.sparks.spawn({ p: { x: p.x + t * 0.5, y: 0.65 + t * 0.5, z: p.z }, v: { x: (Math.random() - 0.5) * 1.5, y: Math.random() * 1.5, z: (Math.random() - 0.5) * 1.5 }, color: col, size: 0.06, life: 0.5, grav: -4 });
+    }
+    const axis = new THREE.Vector3(dir.z, 0, -dir.x);
+    const q0 = victim.quaternion.clone();
+    tween(260, (k) => { slash.material.opacity = 1 - k; slash.scale.set(1 + k, 1, 1); }, ease.outCubic).then(() => { this.scene.remove(slash); slash.geometry.dispose(); });
+    await tween(620, (k) => {
+      victim.quaternion.copy(new THREE.Quaternion().setFromAxisAngle(axis, 0.6 * k)).multiply(q0);
+      victim.position.y = p.y - 1.5 * k * k;
+    }, ease.inOutCubic);
+    this._removePiece(victim);
+  }
+
+  /** Farzin/fil girdobi: dona aylanib koʻtariladi va uchqunlarga aylanadi. */
+  async _vortex(victim, col) {
+    const p = victim.position, y0 = p.y, ry = victim.rotation.y;
+    await tween(720, (k) => {
+      victim.rotation.y = ry + k * k * Math.PI * 10;
+      p.y = y0 + 1.4 * k * k;
+      victim.scale.setScalar(Math.max(0.01, 1 - k * k));
+      const a = k * Math.PI * 12;
+      for (let i = 0; i < 2; i++) {
+        this.sparks.spawn({ p: { x: p.x + Math.cos(a + i * Math.PI) * 0.45 * (1 - k), y: p.y + 0.3, z: p.z + Math.sin(a + i * Math.PI) * 0.45 * (1 - k) },
+          v: { x: 0, y: 0.6, z: 0 }, color: i ? col : 0xffffff, size: 0.08, life: 0.6 });
+      }
+    }, ease.linear);
+    for (let i = 0; i < 30; i++) {
+      const a = Math.random() * Math.PI * 2;
+      this.sparks.spawn({ p: { x: p.x, y: p.y + 0.3, z: p.z }, v: { x: Math.cos(a) * 2, y: (Math.random() - 0.5) * 2, z: Math.sin(a) * 2 }, color: col, size: 0.08, life: 0.7, drag: 1.5 });
+    }
+    this._flash(p, col, 4);
+    this._removePiece(victim);
+  }
+
+  /** Farzin zarbasi: zarb toʻlqini halqasi va kuchli parchalanish. */
+  _blast(victim, col) {
+    const p = victim.position.clone();
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.2, 0.32, 48), new THREE.MeshBasicMaterial({ color: col, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+    ring.rotation.x = -Math.PI / 2; ring.position.set(p.x, 0.03, p.z); this.scene.add(ring);
+    tween(520, (k) => { ring.scale.setScalar(1 + k * 7); ring.material.opacity = 1 - k; }, ease.outCubic).then(() => { this.scene.remove(ring); ring.geometry.dispose(); });
+    this.shake = 0.22;
+    this._shatter(victim, col, 2);
+  }
+
+  _shatter(victim, sparkColor, power = 1) {
+    const n = Math.round((this.quality === 'low' ? 8 : 20) * Math.min(1.6, power));
     const bb = victim.geometry.boundingBox, hgt = bb.max.y;
     const geo = new THREE.TetrahedronGeometry(1, 0);
     const mat = victim.material.clone(); mat.transparent = true;
@@ -748,7 +886,7 @@ export class Scene3D {
       f.position.set(victim.position.x + Math.cos(a) * rr, 0.1 + Math.random() * hgt, victim.position.z + Math.sin(a) * rr);
       f.scale.setScalar(0.045 + Math.random() * 0.07);
       f.castShadow = this.quality === 'high';
-      f.userData = { v: new THREE.Vector3(Math.cos(a) * (1.2 + Math.random() * 2), 2 + Math.random() * 3, Math.sin(a) * (1.2 + Math.random() * 2)),
+      f.userData = { v: new THREE.Vector3(Math.cos(a) * (1.2 + Math.random() * 2) * power, (2 + Math.random() * 3) * Math.sqrt(power), Math.sin(a) * (1.2 + Math.random() * 2) * power),
         w: new THREE.Vector3(Math.random() * 10, Math.random() * 10, Math.random() * 10), life: 1.4 + Math.random() * 0.4, mat };
       this.scene.add(f); this.fragments.push(f);
     }
@@ -810,6 +948,7 @@ export class Scene3D {
     const y0 = p.y, ry0 = mesh.rotation.y;
     await tween(450, (k) => { pillar.material.opacity = 0.45 * k; p.y = y0 + 1.3 * k; mesh.rotation.y = ry0 + k * Math.PI * 4; }, ease.inOutCubic);
     mesh.geometry = this.geos[type]; mesh.userData.type = type;
+    const ol = mesh.getObjectByName('outline'); if (ol) ol.geometry = this.geos.outline[type];
     for (let i = 0; i < 40; i++) {
       const a = Math.random() * Math.PI * 2, sp = 1 + Math.random() * 2;
       this.sparks.spawn({ p: { x: p.x, y: p.y + 0.5, z: p.z }, v: { x: Math.cos(a) * sp, y: (Math.random() - 0.3) * 2, z: Math.sin(a) * sp }, color: 0xfff3b0, size: 0.08, life: 0.8, drag: 1.2 });
@@ -1009,10 +1148,11 @@ export class Scene3D {
       u.life -= dt;
       u.v.y -= 9.8 * dt;
       f.position.addScaledVector(u.v, dt);
-      if (f.position.y < 0.03) { f.position.y = 0.03; u.v.y *= -0.35; u.v.x *= 0.7; u.v.z *= 0.7; u.w.multiplyScalar(0.7); }
+      const onBoard = Math.abs(f.position.x) < 4.75 && Math.abs(f.position.z) < 4.75;
+      if (f.position.y < 0.03 && (onBoard || !u.kicked)) { f.position.y = 0.03; u.v.y *= -0.35; u.v.x *= 0.7; u.v.z *= 0.7; u.w.multiplyScalar(0.7); }
       f.rotation.x += u.w.x * dt; f.rotation.y += u.w.y * dt; f.rotation.z += u.w.z * dt;
       if (u.life < 0.5) f.scale.multiplyScalar(0.92);
-      if (u.life <= 0) { this.scene.remove(f); this.fragments.splice(i, 1); }
+      if (u.life <= 0 || f.position.y < -4) { if (f.parent) f.parent.remove(f); this.fragments.splice(i, 1); }
     }
     this.sparks.update(dt); this.dust.update(dt); this.confetti.update(dt);
     // ambient zarralar aylanib yuradi

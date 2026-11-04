@@ -15,21 +15,21 @@ export const THEMES = {
   klassik: {
     name: 'Klassik yogʻoch', free: true,
     bg: 0x2a1d14, fog: 0x2a1d14, board: 'wood', frame: 0x5a3a22, frameMetal: 0.1, label: '#f3dfbf',
-    light: { color: 0xf3dfbf, roughness: 0.42, metalness: 0.0, clearcoat: 0.6 },
+    light: { color: 0xd9bf94, roughness: 0.45, metalness: 0.0, clearcoat: 0.5 },
     dark: { color: 0x3b2416, roughness: 0.38, metalness: 0.0, clearcoat: 0.7 },
     accent: 0xffc36b,
   },
   marmar: {
     name: 'Marmar',
     bg: 0x1c1d22, fog: 0x1c1d22, board: 'marble', frame: 0xc9a45c, frameMetal: 0.9, label: '#3a2a10',
-    light: { color: 0xffffff, roughness: 0.18, metalness: 0.0, clearcoat: 1.0, map: 'marbleLight' },
+    light: { color: 0xe4e0d8, roughness: 0.2, metalness: 0.0, clearcoat: 1.0, map: 'marbleLight' },
     dark: { color: 0x2b2b30, roughness: 0.16, metalness: 0.0, clearcoat: 1.0, map: 'marbleDark' },
     accent: 0xe8c77a,
   },
   oltin: {
     name: 'Oltin & Obsidian',
     bg: 0x0b0b10, fog: 0x0b0b10, board: 'obsidian', frame: 0xd4a640, frameMetal: 1.0, label: '#3a2a10',
-    light: { color: 0xffcf5a, roughness: 0.22, metalness: 1.0, clearcoat: 0.3 },
+    light: { color: 0xe8b84a, roughness: 0.25, metalness: 1.0, clearcoat: 0.3 },
     dark: { color: 0x15131c, roughness: 0.12, metalness: 0.6, clearcoat: 1.0 },
     accent: 0xffd36a, sparkle: true,
   },
@@ -38,7 +38,7 @@ export const THEMES = {
     bg: 0x05040f, fog: 0x05040f, board: 'neon', frame: 0x14102e, frameMetal: 0.4, label: '#7fe9ff',
     light: { color: 0x9ff6ff, roughness: 0.3, metalness: 0.2, emissive: 0x19c6ff, emissiveIntensity: 0.3 },
     dark: { color: 0xff7ad9, roughness: 0.3, metalness: 0.2, emissive: 0xff2fb4, emissiveIntensity: 0.28 },
-    accent: 0x3cf2ff, bloom: true,
+    accent: 0x3cf2ff, bloom: true, outline: 0x020208,
   },
   kristall: {
     name: 'Kristall',
@@ -50,7 +50,7 @@ export const THEMES = {
   samarqand: {
     name: 'Samarqand',
     bg: 0x0a1a2c, fog: 0x0a1a2c, board: 'samarqand', frame: 0xc8a050, frameMetal: 0.9, label: '#3a2a10',
-    light: { color: 0xf6ecd6, roughness: 0.3, metalness: 0.0, clearcoat: 0.8 },
+    light: { color: 0xe2d3b0, roughness: 0.32, metalness: 0.0, clearcoat: 0.7 },
     dark: { color: 0xc9a14a, roughness: 0.25, metalness: 1.0, clearcoat: 0.4 },
     accent: 0x3fd0c9,
   },
