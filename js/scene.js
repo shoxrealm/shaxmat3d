@@ -292,6 +292,9 @@ function radialTexture(inner, outer) {
 }
 
 // ───────────── zarrachalar (Points + shader) ─────────────
+const _tmpColor = new THREE.Color();
+const _shakeOff = new THREE.Vector3();
+const _arcQ = new THREE.Quaternion();
 class Emitter {
   constructor(max, additive, square = false) {
     this.max = max; this.n = 0;
@@ -321,24 +324,43 @@ class Emitter {
     });
     this.points = new THREE.Points(geo, this.mat);
     this.points.frustumCulled = false;
+    this.points.visible = false;
     this.geo = geo;
+    this.lastN = 0;
+    this.attrs = [[this.attrP, 3], [this.attrC, 3], [this.attrS, 1], [this.attrA, 1]];
   }
   spawn(o) {
     if (this.n >= this.max) return;
-    const i = this.n++, c = new THREE.Color(o.color ?? 0xffffff);
-    this.p.set([o.p.x, o.p.y, o.p.z], i * 3); this.v.set([o.v?.x || 0, o.v?.y || 0, o.v?.z || 0], i * 3);
-    this.c.set([c.r, c.g, c.b], i * 3);
+    const i = this.n++, c = _tmpColor.set(o.color ?? 0xffffff), i3 = i * 3;
+    this.p[i3] = o.p.x; this.p[i3 + 1] = o.p.y; this.p[i3 + 2] = o.p.z;
+    const v = o.v; this.v[i3] = v ? v.x || 0 : 0; this.v[i3 + 1] = v ? v.y || 0 : 0; this.v[i3 + 2] = v ? v.z || 0 : 0;
+    this.c[i3] = c.r; this.c[i3 + 1] = c.g; this.c[i3 + 2] = c.b;
     this.s0[i] = o.size ?? 0.06; this.s[i] = this.s0[i]; this.a[i] = 1;
     this.life[i] = this.maxLife[i] = o.life ?? 1; this.g[i] = o.grav ?? 0; this.drag[i] = o.drag ?? 0; this.grow[i] = o.grow ?? 0;
   }
+  /** GPU ga faqat tirik zarralarni yuboramiz; boʻsh emitter umuman chizilmaydi. */
+  upload() {
+    const n = this.n;
+    this.geo.setDrawRange(0, n);
+    this.points.visible = n > 0;
+    if (n === 0 && this.lastN === 0) return;
+    this.lastN = n;
+    if (n === 0) return;
+    for (const [a, k] of this.attrs) { a.clearUpdateRanges(); a.addUpdateRange(0, n * k); a.needsUpdate = true; }
+  }
   update(dt) {
+    const p = this.p, v = this.v, c = this.c;
     for (let i = 0; i < this.n; i++) {
       this.life[i] -= dt;
       if (this.life[i] <= 0) {
         const j = --this.n;
         if (i !== j) {
-          for (const [arr, k] of [[this.p, 3], [this.v, 3], [this.c, 3]]) for (let t = 0; t < k; t++) arr[i * k + t] = arr[j * k + t];
-          for (const arr of [this.s, this.a, this.life, this.maxLife, this.g, this.drag, this.s0, this.grow]) arr[i] = arr[j];
+          const i3 = i * 3, j3 = j * 3;
+          p[i3] = p[j3]; p[i3 + 1] = p[j3 + 1]; p[i3 + 2] = p[j3 + 2];
+          v[i3] = v[j3]; v[i3 + 1] = v[j3 + 1]; v[i3 + 2] = v[j3 + 2];
+          c[i3] = c[j3]; c[i3 + 1] = c[j3 + 1]; c[i3 + 2] = c[j3 + 2];
+          this.s[i] = this.s[j]; this.a[i] = this.a[j]; this.life[i] = this.life[j]; this.maxLife[i] = this.maxLife[j];
+          this.g[i] = this.g[j]; this.drag[i] = this.drag[j]; this.s0[i] = this.s0[j]; this.grow[i] = this.grow[j];
         }
         i--; continue;
       }
@@ -350,8 +372,7 @@ class Emitter {
       this.a[i] = Math.min(1, k * 2.2);
       this.s[i] = this.s0[i] * (1 + this.grow[i] * (1 - k));
     }
-    this.geo.setDrawRange(0, this.n);
-    this.attrP.needsUpdate = this.attrC.needsUpdate = this.attrS.needsUpdate = this.attrA.needsUpdate = true;
+    this.upload();
   }
 }
 
@@ -380,7 +401,10 @@ export class Scene3D {
     r.toneMappingExposure = 0.85;
     r.shadowMap.enabled = true;
     r.shadowMap.type = THREE.PCFSoftShadowMap;
+    r.shadowMap.autoUpdate = false; // soya faqat donalar qimirlaganda qayta chiziladi (_frame)
     container.appendChild(r.domElement);
+    this.perf = { ema: 0, slow: 0 };
+    this.shadowFrames = 3; this.dirty = true; this.idleTick = 0; this.prevFull = false;
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
@@ -455,7 +479,9 @@ export class Scene3D {
     this.quality = q;
     const dpr = Math.min(window.devicePixelRatio || 1, q === 'high' ? 2 : q === 'mid' ? 1.5 : 1);
     this.renderer.setPixelRatio(dpr);
+    this.perf.ema = 0; this.perf.slow = 0;
     this.renderer.shadowMap.enabled = q !== 'low';
+    this.renderer.shadowMap.type = q === 'high' ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
     this.sun.shadow.mapSize.set(q === 'high' ? 2048 : 1024, q === 'high' ? 2048 : 1024);
     if (this.sun.shadow.map) { this.sun.shadow.map.dispose(); this.sun.shadow.map = null; }
     this.scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; });
@@ -499,7 +525,11 @@ export class Scene3D {
     this.scene.environmentIntensity = th.board === 'neon' ? 0.3 : (th.env ?? 0.6);
     this.hemi.intensity = th.board === 'neon' ? 0.12 : 0.28;
     this.sun.intensity = th.board === 'neon' ? 0.55 : 1.25;
+    if (this.mats) { for (const c of ['w', 'b']) { this.mats[c].map?.dispose(); this.mats[c].dispose(); this.fragMats[c].dispose(); } }
     this.mats = { w: this._mat(th.light), b: this._mat(th.dark) };
+    // parchalanish boʻlaklari uchun tayyor shaffof material (har urishda klon qilinmaydi)
+    this.fragMats = {};
+    for (const c of ['w', 'b']) { const fm = this.mats[c].clone(); fm.transparent = true; this.fragMats[c] = fm; }
     if (this.outlineMat) this.outlineMat.dispose();
     this.outlineMat = outlineMaterial(th.outline ?? 0x050505, th.outlineWidth ?? 0.016);
     for (const m of this.pieces.values()) {
@@ -509,12 +539,18 @@ export class Scene3D {
     this.selRing.material.color = new THREE.Color(th.accent);
     this._setupBloom();
     this._seedAmbient();
+    this.dirty = true;
+    this._warmup();
   }
 
   setEffect(key) { this.effect = key; }
 
   _setupBloom() {
     const want = this.theme.bloom && this.quality !== 'low';
+    if (this.composer) { // eski render targetlar GPU xotirasida qolib ketmasin
+      for (const p of this.composer.passes) p.dispose && p.dispose();
+      this.composer.dispose();
+    }
     if (!want) { this.composer = null; return; }
     const size = this.renderer.getSize(new THREE.Vector2());
     this.composer = new EffectComposer(this.renderer);
@@ -538,6 +574,7 @@ export class Scene3D {
   }
 
   _resize() {
+    this.dirty = true;
     const w = this.container.clientWidth || window.innerWidth, h = this.container.clientHeight || window.innerHeight;
     this.renderer.setSize(w, h, false);
     this.renderer.domElement.style.width = '100%'; this.renderer.domElement.style.height = '100%';
@@ -632,11 +669,13 @@ export class Scene3D {
     ol.name = 'outline'; ol.raycast = () => {};
     m.add(ol);
     this.piecesGroup.add(m);
+    this.dirty = true;
     return m;
   }
 
   _removePiece(m) {
     this.piecesGroup.remove(m);
+    this.dirty = true;
   }
 
   /** board — chess.js board() natijasi (8x8, [0] = 8-qator). */
@@ -705,8 +744,7 @@ export class Scene3D {
       m.position.lerpVectors(from, to, k);
       m.position.y = from.y + (to.y - from.y) * k + h * Math.sin(Math.PI * k);
       if (lean && axis.lengthSq() > 0) {
-        const q = new THREE.Quaternion().setFromAxisAngle(axis, Math.sin(Math.PI * k) * 0.28 * (k < 0.5 ? 1 : 0.6));
-        m.quaternion.copy(q).multiply(q0);
+        m.quaternion.copy(_arcQ.setFromAxisAngle(axis, Math.sin(Math.PI * k) * 0.28 * (k < 0.5 ? 1 : 0.6))).multiply(q0);
       }
       if (this.effect === 'yulduz' && Math.random() < 0.7) {
         this.sparks.spawn({ p: m.position.clone().add(new THREE.Vector3(0, 0.3, 0)), v: { x: (Math.random() - 0.5) * 0.4, y: 0.3, z: (Math.random() - 0.5) * 0.4 },
@@ -885,8 +923,11 @@ export class Scene3D {
   _shatter(victim, sparkColor, power = 1) {
     const n = Math.round((this.quality === 'low' ? 8 : 20) * Math.min(1.6, power));
     const bb = victim.geometry.boundingBox, hgt = bb.max.y;
-    const geo = new THREE.TetrahedronGeometry(1, 0);
-    const mat = victim.material.clone(); mat.transparent = true;
+    const geo = this.tetGeo || (this.tetGeo = new THREE.TetrahedronGeometry(1, 0));
+    const base = this.fragMats[victim.userData.color];
+    // effekt (chaqmoq) materialni oʻzgartirgan boʻlsa — klon (dastur bir xil, kompilyatsiya boʻlmaydi)
+    let mat = base;
+    if (victim.material !== this.mats[victim.userData.color]) { mat = victim.material.clone(); mat.transparent = true; }
     for (let i = 0; i < n; i++) {
       const f = new THREE.Mesh(geo, mat);
       const a = Math.random() * Math.PI * 2, rr = Math.random() * 0.22;
@@ -1145,9 +1186,30 @@ export class Scene3D {
   }
 
   // ───── kadr ─────
+  /** Kadr tezligini kuzatadi: telefon ulgurmasa, piksel zichligini bosqichma-bosqich pasaytiradi. */
+  _adapt(rawDt) {
+    const p = this.perf;
+    if (rawDt > 0.25 || document.hidden) { p.slow = 0; return; }
+    p.ema = p.ema ? p.ema * 0.9 + rawDt * 0.1 : rawDt;
+    p.slow = p.ema > 0.024 ? p.slow + rawDt : 0;
+    if (p.slow > 1.5) {
+      const cur = this.renderer.getPixelRatio();
+      if (cur > 1.01) {
+        this.renderer.setPixelRatio(Math.max(1, cur - 0.25));
+        this._resize();
+      }
+      p.slow = 0; p.ema = 0;
+    }
+  }
+
   _frame() {
-    const dt = Math.min(0.05, this.clock.getDelta());
+    const rawDt = this.clock.getDelta();
+    const dt = Math.min(0.05, rawDt);
     const now = performance.now();
+    if (this.prevFull) this._adapt(rawDt);
+    // donalar harakatlanayaptimi? — soya xaritasi faqat shunda qayta chiziladi
+    const moving = tweens.length > 0 || this.fragments.length > 0 || this.dragging || this.dirty;
+    if (moving) this.shadowFrames = 3;
     stepTweens(now);
     // boʻlaklar fizikasi
     for (let i = this.fragments.length - 1; i >= 0; i--) {
@@ -1169,7 +1231,7 @@ export class Scene3D {
       if (am.p[i * 3 + 1] > 5) am.p[i * 3 + 1] = 0;
       am.a[i] = 0.35 + 0.35 * Math.sin(now * 0.002 + i * 1.7);
     }
-    am.geo.setDrawRange(0, am.n); am.attrP.needsUpdate = am.attrA.needsUpdate = true;
+    am.upload();
     // tanlov va shoh belgisi pulsatsiyasi
     if (this.selRing.visible) { const s = 1 + 0.06 * Math.sin(now * 0.008); this.selRing.scale.setScalar(s); }
     if (this.checkRing.visible) {
@@ -1177,13 +1239,49 @@ export class Scene3D {
       this.checkRing.material.opacity = 0.35 + 0.5 * s; this.checkRing.scale.setScalar(0.9 + 0.25 * s);
       this.checkLight.intensity = 1.5 + 2 * s;
     }
-    if (this.controls) this.controls.update();
-    let off = null;
-    if (this.shake > 0.001) {
-      off = new THREE.Vector3((Math.random() - 0.5) * this.shake, (Math.random() - 0.5) * this.shake, (Math.random() - 0.5) * this.shake);
-      this.camera.position.add(off); this.shake *= 0.85;
+    const camMoved = this.controls ? this.controls.update() : false;
+    const shaking = this.shake > 0.001;
+    // faol holatda har kadr, tinch holatda (faqat fon zarralari) har ikkinchi kadr chiziladi
+    const active = moving || camMoved || shaking || this.selRing.visible || this.checkRing.visible
+      || this.sparks.n > 0 || this.dust.n > 0 || this.confetti.n > 0;
+    this.idleTick = active ? 0 : this.idleTick + 1;
+    this.prevFull = active;
+    if (!active && this.idleTick % 2 === 1) return;
+    const sm = this.renderer.shadowMap;
+    sm.needsUpdate = sm.enabled && this.shadowFrames > 0;
+    if (this.shadowFrames > 0) this.shadowFrames--;
+    this.dirty = false;
+    if (shaking) {
+      _shakeOff.set((Math.random() - 0.5) * this.shake, (Math.random() - 0.5) * this.shake, (Math.random() - 0.5) * this.shake);
+      this.camera.position.add(_shakeOff); this.shake *= 0.85;
     }
     if (this.composer) this.composer.render(); else this.renderer.render(this.scene, this.camera);
-    if (off) this.camera.position.sub(off);
+    if (shaking) this.camera.position.sub(_shakeOff);
+  }
+
+  /** Birinchi urish/effektda shader kompilyatsiyasi sabab qotib qolmasligi uchun barcha materiallarni oldindan tayyorlaymiz. */
+  _warmup() {
+    const g = new THREE.Group();
+    const add = (geo, mat, ctor = THREE.Mesh) => { const m = new ctor(geo, mat); m.frustumCulled = false; m.position.set(0, -50, 0); g.add(m); return m; };
+    const tet = new THREE.TetrahedronGeometry(0.01, 0), plane = new THREE.PlaneGeometry(0.01, 0.01);
+    for (const c of ['w', 'b']) { add(tet, this.fragMats[c]).castShadow = true; }
+    // materiallar oʻchirilmaydi: dispose qilinsa, kompilyatsiya qilingan dastur ham oʻchib ketadi
+    this._warmMats = this._warmMats || [
+      new THREE.MeshBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+      new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide }),
+      new THREE.LineBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending }),
+    ];
+    const lineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0.01, 0)]);
+    for (const m of this._warmMats) m.isLineBasicMaterial ? add(lineGeo, m, THREE.Line) : add(plane, m);
+    const emitters = [this.sparks, this.dust, this.confetti, this.ambient];
+    const vis = emitters.map((e) => e.points.visible);
+    emitters.forEach((e) => (e.points.visible = true));
+    this.scene.add(g);
+    try { this.renderer.compile(this.scene, this.camera); } catch (e) { /* ixtiyoriy */ }
+    this.scene.remove(g);
+    emitters.forEach((e, i) => (e.points.visible = vis[i]));
+    tet.dispose(); plane.dispose(); lineGeo.dispose();
   }
 }

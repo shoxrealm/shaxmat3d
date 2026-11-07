@@ -391,7 +391,7 @@ function goHome() {
   $('#btnContinue').classList.toggle('hidden', !S.chess.history().length || S.over);
   updateHomeBadges();
   TG.setBack(null);
-  scene.setInsets(160, 330); scene.setOrientation('w');
+  scene.setInsets(140, 352); scene.setOrientation('w');
   scene.setIdle(true);
 }
 
@@ -1350,7 +1350,7 @@ async function init() {
   scene.onTap = onTap; scene.canDrag = canDrag;
   scene.applyTheme(S.settings.theme); scene.setEffect(S.settings.effect);
   applySettings();
-  scene.setInsets(160, 330);
+  scene.setInsets(140, 352);
   scene.setOrientation('w', false);
   scene.setIdle(true);
   await scene.setBoard(new Chess().board(), true);
