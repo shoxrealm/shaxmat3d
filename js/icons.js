@@ -28,6 +28,15 @@ export function icon(name, size = 22) {
   return `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name] || ''}</svg>`;
 }
 
+/** Brend belgisi: yashil ot boshi, guruch rangli yol (yol chizigʻi fon rangida kesilgan). */
+export function knightLogo(size = 56) {
+  return `<svg class="logo" width="${size}" height="${size}" viewBox="0 0 64 64" aria-hidden="true">
+    <path class="logo-body" d="M19 60h32c0-12-1-22-4-31-2-7-7-13-13-15l-2-8-5 7c-6 2-11 7-14 14l-4 8c-1 3 0 5 3 6 2 1 4 0 6-1l6-3c2 0 3 1 3 2-3 5-8 11-8 21Z"/>
+    <path class="logo-mane" d="M36 15c6 4 9 11 10 20 1 7 1 15 1 25" fill="none" stroke-width="3.2" stroke-linecap="round"/>
+    <circle class="logo-eye" cx="24.5" cy="23" r="2"/>
+  </svg>`;
+}
+
 /** Girih: ikki kvadratdan hosil boʻlgan 8 burchakli yulduz, ichida matn (masalan "1–0" yoki ♞). */
 export function medallion(inner = '', size = 120, cls = '') {
   const sq = (r) => `<rect x="${60 - r}" y="${60 - r}" width="${2 * r}" height="${2 * r}"/>`;

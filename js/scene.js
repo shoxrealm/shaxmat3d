@@ -1,4 +1,4 @@
-// Shaxmat 3D — three.js sahnasi: doska, donalar, mavzular, animatsiyalar va effektlar.
+﻿// Shaxmat 3D — three.js sahnasi: doska, donalar, mavzular, animatsiyalar va effektlar.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
@@ -193,10 +193,10 @@ function boardTexture(style, size) {
   let emissive = null;
   if (style === 'wood') {
     each((i, j, px, py, light) => {
-      x.fillStyle = light ? '#d6aa70' : '#6b3d20'; x.fillRect(px, py, q, q);
+      x.fillStyle = light ? '#d4b07c' : '#6e3c1f'; x.fillRect(px, py, q, q);
       x.globalAlpha = 0.18;
       for (let k = 0; k < 18; k++) {
-        x.strokeStyle = light ? '#b98d5c' : '#3f2414'; x.lineWidth = 1 + r() * 2; x.beginPath();
+        x.strokeStyle = light ? '#b8905e' : '#4a2814'; x.lineWidth = 1 + r() * 2; x.beginPath();
         const vert = (i + j) % 2 === 0, o = r() * q;
         for (let t = 0; t <= q; t += 8) {
           const w = Math.sin((t + k * 13) * 0.05) * 3;
@@ -373,7 +373,8 @@ export class Scene3D {
     this.insets = { top: 0, bottom: 0 };
     this.camAnim = false;
 
-    const r = this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    const r = this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+    r.setClearColor(0x000000, 0);
     r.outputColorSpace = THREE.SRGBColorSpace;
     r.toneMapping = THREE.ACESFilmicToneMapping;
     r.toneMappingExposure = 0.85;
@@ -412,7 +413,10 @@ export class Scene3D {
     this.top.rotation.x = -Math.PI / 2; this.top.position.y = 0.006; this.top.receiveShadow = true;
     this.floor = new THREE.Mesh(new THREE.CircleGeometry(30, 48), new THREE.MeshBasicMaterial({ depthWrite: false }));
     this.floor.rotation.x = -Math.PI / 2; this.floor.position.y = -0.62;
-    this.boardGroup.add(this.floor, this.frame, this.labels, this.top);
+    // ochiq fonda: faqat soya tushadigan koʻrinmas tekislik
+    this.shadowCatcher = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.ShadowMaterial({ opacity: 0.2, depthWrite: false }));
+    this.shadowCatcher.rotation.x = -Math.PI / 2; this.shadowCatcher.position.y = -0.61; this.shadowCatcher.receiveShadow = true;
+    this.boardGroup.add(this.floor, this.shadowCatcher, this.frame, this.labels, this.top);
 
     // belgilar (tanlov, oxirgi yurish, nuqtalar)
     this.markGroup = new THREE.Group(); this.scene.add(this.markGroup);
@@ -473,8 +477,11 @@ export class Scene3D {
   applyTheme(key) {
     const th = THEMES[key] || THEMES.klassik;
     this.themeKey = key; this.theme = th;
-    this.scene.background = new THREE.Color(th.bg);
-    this.scene.fog = new THREE.Fog(th.fog, 18, 40);
+    const lightBg = th.backdrop === 'light';
+    this.scene.background = lightBg ? null : new THREE.Color(th.bg);
+    this.scene.fog = lightBg ? null : new THREE.Fog(th.fog, 18, 40);
+    this.floor.visible = !lightBg; this.shadowCatcher.visible = lightBg;
+    document.documentElement.classList.toggle('dark-stage', !lightBg);
     this.floor.material.map = radialTexture(hex(new THREE.Color(th.bg).offsetHSL(0, 0, 0.08).getHex()), hex(th.bg));
     this.floor.material.needsUpdate = true;
     Object.assign(this.frame.material, { color: new THREE.Color(th.frame), metalness: th.frameMetal, roughness: th.frameMetal > 0.5 ? 0.25 : 0.5, clearcoat: 0.6 });

@@ -6,7 +6,7 @@ import * as NET from './net.js';
 import { INVOICES } from './invoices.js';
 import * as TG from './telegram.js';
 import { play, setSound } from './sound.js';
-import { icon, medallion } from './icons.js';
+import { icon, medallion, knightLogo } from './icons.js';
 
 const $ = (s) => document.querySelector(s);
 const VAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
@@ -805,6 +805,7 @@ function openStats() {
 async function init() {
   document.querySelectorAll('[data-ic]').forEach((el) => (el.innerHTML = icon(el.dataset.ic)));
   document.querySelectorAll('[data-medal]').forEach((el) => (el.innerHTML = medallion(el.dataset.medal, 74)));
+  document.querySelectorAll('[data-logo]').forEach((el) => (el.innerHTML = knightLogo(+el.dataset.logo || 56)));
   TG.initTelegram();
   const [settings, owned, stats, game] = await Promise.all([TG.storeGet('settings'), TG.storeGet('owned'), TG.storeGet('stats'), TG.storeGet('game')]);
   S.settings = { ...DEFAULTS, ...(settings || {}) };

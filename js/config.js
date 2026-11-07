@@ -1,4 +1,4 @@
-// Shaxmat 3D — konfiguratsiya: mavzular, effektlar, doʻkon mahsulotlari.
+﻿// Shaxmat 3D — konfiguratsiya: mavzular, effektlar, doʻkon mahsulotlari.
 // invoiceUrl — bot (createInvoiceLink) orqali yaratilgan doimiy Telegram Stars havolalari.
 
 export const BOT_USERNAME = 'Shaxmat3DBot';
@@ -16,10 +16,11 @@ export const LEVELS = [
 export const THEMES = {
   klassik: {
     name: 'Klassik yogʻoch', free: true,
-    bg: 0x0E1A2E, fog: 0x0E1A2E, board: 'wood', frame: 0x5a3a22, frameMetal: 0.1, label: '#f3dfbf',
-    light: { color: 0xd9bf94, roughness: 0.45, metalness: 0.0, clearcoat: 0.5 },
-    dark: { color: 0x3b2416, roughness: 0.38, metalness: 0.0, clearcoat: 0.7 },
-    accent: 0xffc36b,
+    // backdrop: 'light' — sahna foni shaffof, orqada CSS krem fon (shaxmat naqshi) koʻrinadi
+    bg: 0xF4EEE3, fog: 0xF4EEE3, backdrop: 'light', board: 'wood', frame: 0x4e2a16, frameMetal: 0.1, label: '#f1dfc2',
+    light: { color: 0xdcc093, roughness: 0.45, metalness: 0.0, clearcoat: 0.5 },
+    dark: { color: 0x2e1c12, roughness: 0.38, metalness: 0.0, clearcoat: 0.7 },
+    accent: 0xc9953f, outline: 0x24160c, outlineWidth: 0.011,
   },
   marmar: {
     name: 'Marmar',
