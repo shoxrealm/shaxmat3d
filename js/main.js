@@ -6,11 +6,10 @@ import * as NET from './net.js';
 import { INVOICES } from './invoices.js';
 import * as TG from './telegram.js';
 import { play, setSound } from './sound.js';
-import { icon, medallion, knightLogo } from './icons.js';
+import { icon, medallion, knightLogo, pieceIcon } from './icons.js';
 
 const $ = (s) => document.querySelector(s);
 const VAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
-const GLYPH = { w: { p: '♙', n: '♘', b: '♗', r: '♖', q: '♕', k: '♔' }, b: { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛', k: '♚' } };
 const REASON = { checkmate: 'Mat', stalemate: 'Pat', threefold: 'Uch marta takrorlanish', fifty: '50 yurish qoidasi',
   insufficient: 'Mat qilish uchun dona yetarli emas', resign: 'Taslim boʻlindi', agreed: 'Kelishuv boʻyicha durang' };
 
@@ -91,7 +90,7 @@ function updateHUD() {
     bar.querySelector('.ava').className = 'ava ' + c + (S.mode === 'ai' && c !== S.player ? ' ai' : '');
     bar.dataset.color = c;
     const opp = c === 'w' ? 'b' : 'w';
-    bar.querySelector('.caps').textContent = capturedBy[c].sort((a, b) => VAL[b] - VAL[a]).map((p) => GLYPH[opp][p]).join('');
+    bar.querySelector('.caps').innerHTML = capturedBy[c].sort((a, b) => VAL[b] - VAL[a]).map((p) => pieceIcon(p, opp)).join('');
     const d = mat(c) - mat(opp);
     bar.querySelector('.adv').textContent = d > 0 ? `+${d}` : '';
     bar.classList.toggle('turn', !S.over && S.chess.turn() === c);
@@ -668,7 +667,7 @@ $('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal' && !S
 function choosePromotion(color) {
   return new Promise((resolve) => {
     S.promoPending = true;
-    openModal(`<h2>Dona tanlang</h2><div class="promo">${['q', 'r', 'b', 'n'].map((p) => `<button data-p="${p}">${GLYPH[color][p]}</button>`).join('')}</div>
+    openModal(`<h2>Dona tanlang</h2><div class="promo">${['q', 'r', 'b', 'n'].map((p) => `<button data-p="${p}">${pieceIcon(p, color, 44)}</button>`).join('')}</div>
       <p class="muted" style="text-align:center">Farzin · Rux · Fil · Ot</p>`);
     $('#modalCard').querySelectorAll('[data-p]').forEach((b) => (b.onclick = () => { S.promoPending = false; closeModal(); resolve(b.dataset.p); }));
   });
