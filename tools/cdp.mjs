@@ -79,6 +79,23 @@ try {
     logs.push('STATE puzzle stats ' + JSON.stringify(await ev('__s3d.S.stats.puzzle')) + ' ach ' + JSON.stringify(await ev('Object.keys(__s3d.S.stats.ach||{})')));
     await ev(`document.querySelector('#pHome').click()`); await sleep(1500); await snap('home_after');
     await ev(`document.querySelector('#btnStats').click()`); await sleep(600); await snap('stats');
+  } else if (scenario === 'p2') {
+    // darslar: rokirovka darsi
+    await ev(`document.querySelector('#btnLessons').click()`); await sleep(600); await snap('lessons');
+    await ev(`document.querySelector('[data-l="6"]').click()`); await sleep(500); await snap('lesson_intro');
+    await ev(`document.querySelector('#lGo').click()`); await sleep(3500);
+    await tapSquare('e1'); await tapSquare('g1'); await sleep(2500); await snap('lesson_done');
+    logs.push('STATE lessons ' + JSON.stringify(await ev('__s3d.S.stats.lessons')));
+    await ev(`document.querySelector('#lHome').click()`); await sleep(1200);
+    // bir telefonda: tez mot, keyin tahlil
+    await ev(`document.querySelector('#btnFriend').click()`); await sleep(3500);
+    for (const [a, b] of [['f2', 'f3'], ['e7', 'e5'], ['g2', 'g4'], ['d8', 'h4']]) { await tapSquare(a); await tapSquare(b); await sleep(1500); }
+    await sleep(3000); await snap('result');
+    await ev(`document.querySelector('#rAn').click()`); await sleep(4000); await snap('analysis');
+    await ev(`document.querySelector('.an-row') && document.querySelector('.an-row').click()`); await sleep(1500); await snap('analysis_row');
+    logs.push('STATE analysis ' + JSON.stringify(await ev('__s3d.S.analysis && __s3d.S.analysis.items.map(i => i.san + ":" + i.kind + ":" + i.bsan)')));
+    const img = await ev(`__s3d.resultCard('Qora yutdi 0–1', 'Bir telefonda · Mat · 2 yurish')`);
+    writeFileSync(join(outDir, 'card.jpg'), Buffer.from(img.split(',')[1], 'base64'));
   } else if (scenario === 'tap') {
     await ev(`document.querySelector('#btnFriend').click()`); await sleep(8000);
     logs.push('BUSY ' + await ev('__s3d.S.busy') + ' fps-check');

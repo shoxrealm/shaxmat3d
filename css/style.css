@@ -266,3 +266,33 @@ table.stats td:first-child, table.stats th:first-child { text-align: left; font-
 .ach-ic { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: var(--paper-3); color: var(--muted); margin-bottom: 4px; }
 .ach.got { opacity: 1; border-color: var(--metal-lo); }
 .ach.got .ach-ic { background: var(--steel-grad); color: #fff; }
+/* 3 ustunli kichik tugmalar va darslar */
+.mini-row { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.mini-btn { flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 10px 9px; }
+.mini-ic { width: 30px; height: 30px; border-radius: 9px; }
+.mini-ic .ic { width: 19px; height: 19px; }
+.mini-t { font-size: 14px; width: 100%; }
+.mini-t small { font-size: 11.5px; }
+.lesson-list { display: grid; gap: 8px; margin: 12px 0 4px; }
+.lesson { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--paper-2); text-align: left; }
+.lesson-ic { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 10px; background: var(--paper-3); color: var(--steel); }
+.lesson.done .lesson-ic { background: var(--steel-grad); color: #fff; }
+.lesson-t { display: grid; font-weight: 700; font-size: 15px; }
+.lesson-t small { font-weight: 400; font-size: 12.5px; color: var(--muted); }
+.lesson-intro { text-align: center; }
+.lesson-big { display: inline-grid; place-items: center; width: 84px; height: 84px; border-radius: 22px; background: var(--paper-2); border: 1px solid var(--line); margin-bottom: 8px; }
+.lesson-intro p { color: var(--ink-2); font-size: 15px; line-height: 1.5; margin: 8px 4px 6px; }
+/* tahlil */
+.card.short { max-height: 50vh; }
+.bar { height: 8px; border-radius: 4px; background: var(--paper-3); overflow: hidden; margin: 14px 0 6px; }
+.bar i { display: block; height: 100%; width: 0; background: var(--steel); transition: width .2s; }
+.an-sum { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0 2px; justify-content: center; }
+.an-chip { padding: 5px 10px; border-radius: 20px; font-size: 12.5px; font-weight: 600; background: var(--paper-2); border: 1px solid var(--line); }
+.an-chip.blunder { color: var(--pome); } .an-chip.mistake { color: #B4641C; } .an-chip.inacc { color: var(--ink-2); }
+.an-list { display: grid; gap: 6px; }
+.an-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--paper-2); text-align: left; font-size: 14.5px; }
+.an-row.on { border-color: var(--steel); box-shadow: inset 0 0 0 1px var(--steel); }
+.an-row.blunder b { color: var(--pome); } .an-row.mistake b { color: #B4641C; }
+.an-no { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 34px; }
+.an-best { margin-left: auto; color: var(--ink-2); font-size: 13px; display: flex; align-items: center; gap: 4px; }
+.an-row.locked { opacity: .6; }

@@ -20,6 +20,7 @@ export const ACHIEVEMENTS = [
   { id: 'days_3', icon: 'check', title: '3 kun ketma-ket', desc: '3 kun ketma-ket oʻynang', test: (c) => (days(c.stats).best || 0) >= 3 },
   { id: 'days_10', icon: 'check', title: '10 kun ketma-ket', desc: '10 kun ketma-ket oʻynang', test: (c) => (days(c.stats).best || 0) >= 10 },
   { id: 'days_30', icon: 'trophy', title: 'Bir oy shaxmat', desc: '30 kun ketma-ket oʻynang', test: (c) => (days(c.stats).best || 0) >= 30 },
+  { id: 'lessons_all', icon: 'check', title: 'Bitiruvchi', desc: 'Barcha darslarni tugating', test: (c) => Object.keys(c.stats.lessons || {}).length >= (c.lessons || 99) },
   { id: 'friend_1', icon: 'pair', title: 'Birinchi doʻst', desc: 'Doʻstingizni taklif qiling', test: (c) => (c.refs || 0) >= 1 },
   { id: 'friend_5', icon: 'pair', title: 'Doʻstlar davrasi', desc: '5 ta doʻstni taklif qiling', test: (c) => (c.refs || 0) >= 5 },
 ];

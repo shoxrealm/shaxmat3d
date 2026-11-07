@@ -41,6 +41,18 @@ export function pieceIcon(type, color, size = 19) {
   return `<svg class="pc pc-${color}" width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true" stroke-width="1.3" stroke-linejoin="round">${PIECE[type] || ''}<rect x="5.6" y="18.9" width="12.8" height="3" rx="1"/></svg>`;
 }
 
+/** Canvas uchun: dona siluetini SVG path satrlari roʻyxati sifatida (doiralar yoyga aylantiriladi). */
+export function piecePaths(type) {
+  const src = (PIECE[type] || '') + '<path d="M6.6 18.9h10.8a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H6.6a1 1 0 0 1-1-1v-1a1 1 0 0 1 1-1Z"/>';
+  const out = [];
+  for (const m of src.matchAll(/<(circle|path)\s+([^>]*?)\/>/g)) {
+    const a = Object.fromEntries([...m[2].matchAll(/(\w+)="([^"]*)"/g)].map((x) => [x[1], x[2]]));
+    if (m[1] === 'path') out.push(a.d);
+    else { const cx = +a.cx, cy = +a.cy, r = +a.r; out.push(`M${cx - r} ${cy}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0Z`); }
+  }
+  return out;
+}
+
 /** Brend belgisi: kumush, qirrali ot (foydalanuvchi bergan rasm, img/logo192.png). */
 export function knightLogo(size = 56) {
   return `<img class="logo" src="img/logo192.png" width="${size}" height="${size}" alt="" draggable="false">`;
