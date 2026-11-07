@@ -28,12 +28,14 @@ export function icon(name, size = 22) {
   return `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name] || ''}</svg>`;
 }
 
-/** Brend belgisi: yashil ot boshi, guruch rangli yol (yol chizigʻi fon rangida kesilgan). */
+/** Brend belgisi: ochiq koʻk yumaloq kvadrat, ichida oq ot boshi va oltin taglik. */
 export function knightLogo(size = 56) {
   return `<svg class="logo" width="${size}" height="${size}" viewBox="0 0 64 64" aria-hidden="true">
-    <path class="logo-body" d="M19 60h32c0-12-1-22-4-31-2-7-7-13-13-15l-2-8-5 7c-6 2-11 7-14 14l-4 8c-1 3 0 5 3 6 2 1 4 0 6-1l6-3c2 0 3 1 3 2-3 5-8 11-8 21Z"/>
-    <path class="logo-mane" d="M36 15c6 4 9 11 10 20 1 7 1 15 1 25" fill="none" stroke-width="3.2" stroke-linecap="round"/>
-    <circle class="logo-eye" cx="24.5" cy="23" r="2"/>
+    <rect class="logo-tile" x="2" y="2" width="60" height="60" rx="16"/>
+    <path class="logo-knight" d="M21 47c0-6 2.5-10.5 7-14.5-3 .3-5.5 1.6-8 2.6-2.4 1-4.6-.3-4.6-2.7 0-1.2.4-2.2 1.2-3.4l4.6-6.6c1.6-2.3 3.6-4.2 6-5.5l1-4.9 3.6 3.9c7.4.6 12.9 6.7 13.7 15.6.4 4.7.5 10.2.5 15.5Z"/>
+    <path class="logo-mane" d="M35.5 17.6c4.4 2.7 7 7.6 7.6 14.2.3 3.8.4 9 .4 15.2" fill="none" stroke-width="2.2" stroke-linecap="round"/>
+    <circle class="logo-eye" cx="27.4" cy="23.6" r="1.7"/>
+    <rect class="logo-base" x="16" y="48.5" width="32" height="5" rx="2.5"/>
   </svg>`;
 }
 
