@@ -7,6 +7,8 @@ import { INVOICES } from './invoices.js';
 import * as TG from './telegram.js';
 import { play, setSound } from './sound.js';
 import { icon, medallion, knightLogo, pieceIcon } from './icons.js';
+import { puzzleFor, puzzleNumber, PRACTICE, isPractice } from './puzzles.js';
+import { ACHIEVEMENTS, checkAchievements, markPlayedDay } from './achievements.js';
 
 const $ = (s) => document.querySelector(s);
 const VAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
@@ -54,7 +56,7 @@ function kingSquare(color) {
 
 // ───────────── saqlash ─────────────
 function saveGame() {
-  if (S.mode === 'online') return;
+  if (S.mode === 'online' || S.mode === 'task') return;
   if (!S.mode || S.over) { TG.storeSet('game', null); return; }
   const moves = S.chess.history({ verbose: true }).map((m) => m.from + m.to + (m.promotion || ''));
   TG.storeSet('game', { mode: S.mode, level: S.level, player: S.player, moves, undos: S.undos, hints: S.hints });
@@ -77,6 +79,7 @@ function updateHUD() {
   const topColor = bottomColor === 'w' ? 'b' : 'w';
   const room = S.mode === 'online' && S.online && S.online.room;
   const name = (c) => {
+    if (S.mode === 'task') return c === S.player ? `Siz <span class="rt">${S.task.goal}</span>` : S.task.title;
     if (S.mode === 'ai') return c === S.player ? escapeHtml(TG.userName()) : `Kompyuter <span class="rt">${LEVELS[S.level].name}</span>`;
     if (room) {
       const p = c === 'w' ? room.white : room.black;
@@ -106,13 +109,14 @@ function updateHUD() {
   }
   box.scrollLeft = box.scrollWidth;
   const pro = isPro();
-  const on = S.mode === 'online';
-  $('#tUndo em').textContent = on ? '' : pro ? '∞' : String(Math.max(0, FREE_UNDOS - S.undos));
-  $('#tHint em').textContent = on ? '' : pro ? '∞' : String(Math.max(0, FREE_HINTS - S.hints));
+  const on = S.mode === 'online', task = S.mode === 'task';
+  $('#tUndo em').textContent = on || task ? '' : pro ? '∞' : String(Math.max(0, FREE_UNDOS - S.undos));
+  $('#tHint em').textContent = on || task ? '' : pro ? '∞' : String(Math.max(0, FREE_HINTS - S.hints));
   $('#tUndo i').innerHTML = icon(on ? 'smile' : 'undo'); $('#tUndo span').textContent = on ? 'Emoji' : 'Orqaga';
   $('#tHint i').innerHTML = icon(on ? 'half' : 'hint'); $('#tHint span').textContent = on ? 'Durang' : 'Maslahat';
-  $('#tResign span').textContent = S.mode === 'friend' ? 'Durang' : 'Taslim';
-  $('#tResign i').innerHTML = icon(S.mode === 'friend' ? 'half' : 'flag');
+  $('#tResign span').textContent = S.mode === 'friend' ? 'Durang' : task ? 'Yechim' : 'Taslim';
+  $('#tResign i').innerHTML = icon(S.mode === 'friend' ? 'half' : task ? 'eye' : 'flag');
+  if (task) $('#tUndo span').textContent = 'Qayta';
   drawClocks();
 }
 
@@ -224,6 +228,7 @@ async function humanMove(from, to, dropped) {
     S.busy = false;
   }
   await playMove({ from, to, promotion }, dropped, true);
+  if (S.mode === 'task') return taskAfterHuman();
   if (!S.over && S.mode === 'friend' && S.settings.autoRotate) await scene.setOrientation(S.chess.turn());
   if (S.mode === 'friend') updateHUD();
   maybeAI();
@@ -273,7 +278,7 @@ async function maybeAI() {
 }
 
 async function checkGameOver(forced = null) {
-  if (S.mode === 'online') return; // onlayn oʻyin natijasini server hal qiladi
+  if (S.mode === 'online' || S.mode === 'task') return; // onlayn natijani server, masalani taskSolved hal qiladi
   const c = S.chess;
   let result = null, reason = null, winner = null;
   if (forced) ({ result, reason, winner } = forced);
@@ -293,6 +298,8 @@ async function checkGameOver(forced = null) {
   const key = S.mode === 'ai' ? 'l' + S.level : 'friend';
   const st = S.stats[key] || (S.stats[key] = { w: 0, l: 0, d: 0 });
   st[outcome === 'win' ? 'w' : outcome === 'loss' ? 'l' : 'd']++;
+  if (S.mode === 'ai' && outcome === 'win' && reason === 'checkmate') S.stats.fastest = Math.min(S.stats.fastest || 99, Math.ceil(c.history().length / 2));
+  markPlayedDay(S.stats);
   TG.storeSet('stats', S.stats);
   if (reason === 'checkmate') {
     flashStatus('Mat', 1400);
@@ -307,6 +314,7 @@ async function checkGameOver(forced = null) {
   await new Promise((r) => setTimeout(r, reason === 'checkmate' || winner ? 2000 : 1200));
   showResult(outcome, reason, winner);
   S.busy = false;
+  afterEvent();
 }
 
 function showResult(outcome, reason, winner) {
@@ -334,12 +342,14 @@ function goHome() {
   scene.confetti.n = 0;
   leaveOnline();
   S.busy = false; S.selected = null; scene.clearSelection(); scene.clearHint();
-  const wasOnline = S.mode === 'online';
+  const wasOnline = S.mode === 'online', wasTask = S.mode === 'task';
   if (!S.over && S.mode) saveGame();
   S.mode = null;
-  if (wasOnline) { S.chess = new Chess(); scene.syncBoard(S.chess.board()); scene.setLastMove(null); scene.setCheck(null); }
+  S.task = null;
+  if (wasOnline || wasTask) { S.chess = new Chess(); scene.syncBoard(S.chess.board()); scene.setLastMove(null); scene.setCheck(null); }
   $('#hud').classList.add('hidden'); $('#home').classList.remove('hidden');
   $('#btnContinue').classList.toggle('hidden', !S.chess.history().length || S.over);
+  updateHomeBadges();
   TG.setBack(null);
   scene.setInsets(160, 330); scene.setOrientation('w');
   scene.setIdle(true);
@@ -348,6 +358,7 @@ function goHome() {
 // ───────────── asboblar ─────────────
 async function doUndo() {
   if (S.mode === 'online') return openEmoji();
+  if (S.mode === 'task') return taskRestart();
   if (S.busy || !S.mode || S.over) return;
   if (!S.chess.history().length) return toast('Hali yurish qilinmagan');
   if (!isPro() && S.undos >= FREE_UNDOS) return upsell('Bepul «Orqaga» tugadi (oʻyinda 3 ta).');
@@ -365,6 +376,7 @@ async function doUndo() {
 
 async function doHint() {
   if (S.mode === 'online') return offerDraw();
+  if (S.mode === 'task') return taskHint();
   if (S.busy || !S.mode || S.over || !isHumanTurn()) return;
   if (!isPro() && S.hints >= FREE_HINTS) return upsell('Bepul maslahat tugadi (oʻyinda 1 ta).');
   S.busy = true; toast('Eng yaxshi yurish izlanmoqda…', 1200);
@@ -374,6 +386,7 @@ async function doHint() {
 }
 
 function doResign() {
+  if (S.mode === 'task') return taskShowSolution();
   if (S.mode === 'online') {
     if (S.over || !S.online.room || !S.online.room.you) return;
     openModal(`<h2>Taslim boʻlasizmi?</h2><p class="muted" style="text-align:center">Oʻyin magʻlubiyat sifatida yoziladi.</p>
@@ -401,8 +414,216 @@ function upsell(text) {
   $('#upShop').onclick = () => openShop();
 }
 
+// ───────────── masalalar (task rejimi) ─────────────
+// S.task = { kind: 'puzzle', n, fen, sol: [m1, javob], step, title, goal, tries }
+const sideName = (c) => (c === 'w' ? 'Oq' : 'Qora');
+const uciOf = (m) => m.from + m.to + (m.promotion || '');
+
+function puzzleStats() { return S.stats.puzzle || (S.stats.puzzle = { solved: [], streak: 0, best: 0, last: 0 }); }
+
+async function startPuzzle(n) {
+  const p = puzzleFor(n);
+  const turn = p.fen.split(' ')[1];
+  const title = isPractice(n) ? `Mashq №${n - 1000}` : `Masala №${n}`;
+  await startTask({ kind: 'puzzle', n, fen: p.fen, sol: p.sol, title, goal: `${sideName(turn)} yuradi: 2 yurishda mot` });
+}
+
+async function startTask(task) {
+  closeModal(); $('#levelSheet').classList.add('hidden');
+  leaveOnline();
+  S.mode = 'task'; S.task = { ...task, step: 0, tries: 0 };
+  S.chess = new Chess(task.fen); S.player = S.chess.turn();
+  S.over = false; S.busy = true; S.selected = null; S.aiReq++;
+  $('#home').classList.add('hidden'); $('#hud').classList.remove('hidden');
+  TG.setBack(() => goHome());
+  scene.setInsets(78, 192);
+  scene.setIdle(false); scene.clearSelection(); scene.clearHint(); scene.setCheck(null); scene.setLastMove(null);
+  scene.setOrientation(S.player);
+  updateHUD();
+  play('castle');
+  await scene.setBoard(S.chess.board(), true);
+  afterPosition(true);
+  S.busy = false;
+  toast(task.goal, 2600);
+}
+
+function taskExpected() {
+  const t = S.task;
+  if (t.step < t.sol.length) return t.sol[t.step];
+  // oxirgi (mot) yurish: istalgan mot qiluvchi yurish toʻgʻri
+  for (const m of S.chess.moves({ verbose: true })) {
+    S.chess.move(m); const mate = S.chess.isCheckmate(); S.chess.undo();
+    if (mate) return uciOf(m);
+  }
+  return null;
+}
+
+async function taskAfterHuman() {
+  const t = S.task;
+  const last = S.chess.history({ verbose: true }).slice(-1)[0];
+  if (!last) return;
+  const good = t.step === 0 ? uciOf(last) === t.sol[0] : S.chess.isCheckmate();
+  if (!good) {
+    t.tries++;
+    S.busy = true;
+    flashStatus('Notoʻgʻri', 900); play('lose'); TG.haptic('error');
+    await new Promise((r) => setTimeout(r, 750));
+    S.chess.undo();
+    await scene.syncBoard(S.chess.board());
+    afterPosition(true);
+    S.busy = false;
+    if (t.tries >= 2) toast('Maslahat tugmasini bosib koʻring', 2000);
+    return;
+  }
+  if (t.step === 0) {
+    t.step = 1; play('promote'); TG.haptic('light');
+    await new Promise((r) => setTimeout(r, 450));
+    const r = t.sol[1];
+    await playMove({ from: r.slice(0, 2), to: r.slice(2, 4), promotion: r[4] });
+    t.step = 2;
+    toast('Endi mot qiling!', 1600);
+    return;
+  }
+  await taskSolved();
+}
+
+async function taskSolved() {
+  const t = S.task;
+  S.over = true; S.busy = true;
+  updateHUD();
+  flashStatus('Mat', 1200);
+  scene.checkmate(kingSquare(S.chess.turn()), S.player);
+  play('win'); TG.haptic('success');
+  const ps = puzzleStats();
+  const first = !ps.solved.includes(t.n);
+  if (first) ps.solved.push(t.n);
+  const today = puzzleNumber();
+  if (t.n === today && ps.last !== today) {
+    ps.streak = ps.last === today - 1 ? (ps.streak || 0) + 1 : 1;
+    ps.best = Math.max(ps.best || 0, ps.streak);
+    ps.last = today;
+  }
+  markPlayedDay(S.stats);
+  TG.storeSet('stats', S.stats);
+  await new Promise((r) => setTimeout(r, 1800));
+  const daily = t.n === today;
+  const next = nextUnsolved(t.n);
+  openModal(`<div class="result win">${medallion('✓')}<h2>Barakalla!</h2>
+    <p>${t.title} yechildi${t.tries ? '' : ', birinchi urinishda'}.</p>
+    ${daily ? `<p class="streak">${icon('bolt', 18)} Seriya: <b>${ps.streak} kun</b>${ps.best > ps.streak ? ` · eng yaxshisi ${ps.best}` : ''}</p>` : ''}
+    ${next ? `<button class="btn primary" id="pNext">Keyingi: ${isPractice(next) ? 'mashq №' + (next - 1000) : 'masala №' + next}</button>` : '<p class="muted center">Barcha masalalar yechildi. Ertaga yangisi chiqadi!</p>'}
+    <button class="btn" id="pShare">${icon('send', 20)}Doʻstlarga yuborish</button>
+    <button class="btn ghost" id="pHome">Bosh menyu</button></div>`);
+  const nb = $('#pNext'); if (nb) nb.onclick = () => startPuzzle(next);
+  $('#pShare').onclick = () => shareInvite(`Men Shaxmat 3D da ${t.title} ni yechdim! Siz ham urinib koʻring 🧩`);
+  $('#pHome').onclick = () => goHome();
+  S.busy = false;
+  afterEvent();
+}
+
+function nextUnsolved(from) {
+  const solved = new Set(puzzleStats().solved), today = puzzleNumber();
+  if (!solved.has(today)) return today;
+  for (let n = 1001; n <= 1000 + PRACTICE; n++) if (!solved.has(n) && n !== from) return n;
+  for (let n = today - 1; n >= 1; n--) if (!solved.has(n) && n !== from) return n;
+  return null;
+}
+
+async function taskRestart() {
+  if (S.busy) return;
+  const t = S.task;
+  await startTask({ kind: t.kind, n: t.n, fen: t.fen, sol: t.sol, title: t.title, goal: t.goal });
+}
+
+function taskHint() {
+  if (S.busy || S.over) return;
+  const mv = taskExpected();
+  if (!mv) return;
+  scene.showHint(mv.slice(0, 2), mv.slice(2, 4)); play('promote');
+  toast('Yashil oʻq — toʻgʻri yurish', 1600);
+}
+
+async function taskShowSolution() {
+  if (S.busy || S.over) return;
+  S.busy = true;
+  while (!S.chess.isCheckmate()) {
+    const mv = taskExpected();
+    if (!mv) break;
+    await playMove({ from: mv.slice(0, 2), to: mv.slice(2, 4), promotion: mv[4] });
+    S.busy = true;
+    S.task.step++;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  S.over = true; S.busy = false;
+  updateHUD();
+  openModal(`<h2>Yechim</h2><p class="muted center">${S.chess.history().join(', ')}</p>
+    <button class="btn primary" id="pAgain">Oʻzim qayta yechaman</button><button class="btn ghost" id="pHome">Bosh menyu</button>`);
+  $('#pAgain').onclick = () => taskRestart();
+  $('#pHome').onclick = () => goHome();
+}
+
+function openPuzzles() {
+  const today = puzzleNumber(), ps = puzzleStats(), solved = new Set(ps.solved);
+  const list = [];
+  for (let n = today; n >= Math.max(1, today - 59); n--) list.push(n);
+  openModal(`<h2>Kunlik masalalar</h2>
+    <p class="muted center">Har kuni yangi masala: 2 yurishda mot. Seriya: <b>${ps.last >= today - 1 ? ps.streak || 0 : 0} kun</b> · yechilgan: ${solved.size}</p>
+    <button class="btn primary" id="pzToday">${solved.has(today) ? 'Bugungi masala yechilgan ✓' : `Bugungi masala (№${today})`}</button>
+    <div class="shop-sec">Kunlik</div>
+    <div class="pz-grid">${list.map((n) => `<button class="pz ${solved.has(n) ? 'done' : ''} ${n === today ? 'today' : ''}" data-n="${n}">${solved.has(n) ? icon('check', 14) : ''}${n}</button>`).join('')}</div>
+    <div class="shop-sec">Mashq uchun</div>
+    <div class="pz-grid">${Array.from({ length: PRACTICE }, (_, i) => 1001 + i).map((n) => `<button class="pz ${solved.has(n) ? 'done' : ''}" data-n="${n}">${solved.has(n) ? icon('check', 14) : ''}${n - 1000}</button>`).join('')}</div>
+    <button class="btn ghost" data-close>Yopish</button>`);
+  $('#pzToday').onclick = () => startPuzzle(today);
+  $('#modalCard').querySelectorAll('[data-n]').forEach((b) => (b.onclick = () => startPuzzle(+b.dataset.n)));
+}
+
+function updateHomeBadges() {
+  const ps = puzzleStats(), today = puzzleNumber();
+  const streak = ps.last >= today - 1 ? ps.streak || 0 : 0;
+  const el = $('#pzSub');
+  if (el) el.textContent = ps.solved.includes(today) ? `Yechildi · seriya ${streak} kun` : streak ? `Seriya ${streak} kun, davom eting` : '2 yurishda mot';
+  $('#btnPuzzle').classList.toggle('done', ps.solved.includes(today));
+}
+
+// ───────────── doʻstlarni taklif qilish ─────────────
+function shareInvite(text) {
+  const link = S.ref ? S.ref.link : `https://t.me/${BOT_USERNAME}`;
+  const tg = window.Telegram && window.Telegram.WebApp;
+  if (tg && tg.openTelegramLink) tg.openTelegramLink('https://t.me/share/url?url=' + encodeURIComponent(link) + '&text=' + encodeURIComponent(text));
+  else if (!TG.shareGame(text + ' ' + link)) toast('Ulashish faqat Telegram ichida');
+}
+
+async function openInvite() {
+  if (!needOnline()) return;
+  openModal('<h2>Doʻstlarni taklif qiling</h2><p class="muted center">Yuklanmoqda…</p>');
+  try {
+    S.ref = await NET.api('/api/ref');
+  } catch (e) { toast('Maʼlumotni yuklab boʻlmadi'); closeModal(); return; }
+  const r = S.ref;
+  const title = (id) => { const it = ITEMS.find((i) => i.id === id); return it ? it.name : id; };
+  openModal(`<h2>Doʻstlarni taklif qiling</h2>
+    <p class="muted center">Havolangiz orqali kelgan har bir yangi doʻst uchun sizga bitta effekt yoki mavzu <b>tekin</b> ochiladi.</p>
+    <div class="ref-box"><div class="ref-n">${r.count}</div><div>taklif qilingan doʻst${r.next ? `<small>Keyingi sovgʻa: <b>${escapeHtml(title(r.next))}</b></small>` : '<small>Sizda hamma narsa ochiq</small>'}</div></div>
+    <button class="btn primary" id="iShare">${icon('send', 20)}Telegramda yuborish</button>
+    <button class="btn" id="iCopy">${icon('link', 20)}Havolani nusxalash</button>
+    ${r.friends.length ? `<div class="shop-sec">Sizning doʻstlaringiz</div><table class="stats">${r.friends.map((f) => `<tr><td>${escapeHtml(f.name)}</td><td>${f.item ? escapeHtml(title(f.item)) : '—'}</td></tr>`).join('')}</table>` : ''}
+    <button class="btn ghost" data-close>Yopish</button>`);
+  $('#iShare').onclick = () => shareInvite('Keling, Shaxmat 3D da oʻynaymiz! Chiroyli 3D shaxmat, kunlik masalalar va onlayn reyting ♟');
+  $('#iCopy').onclick = async () => { try { await navigator.clipboard.writeText(r.link); toast('Havola nusxalandi'); } catch (e) { toast(r.link, 5000); } };
+  afterEvent();
+}
+
+// ───────────── yutuqlar ─────────────
+function afterEvent() {
+  const fresh = checkAchievements({ stats: S.stats, me: S.me, refs: S.ref ? S.ref.count : 0 });
+  if (!fresh.length) return;
+  TG.storeSet('stats', S.stats);
+  fresh.forEach((a, i) => setTimeout(() => { toast('Yangi yutuq: ' + a.title, 2600); play('promote'); TG.haptic('success'); }, 600 + i * 2800));
+}
+
 // ───────────── onlayn oʻyin ─────────────
-const TCS = [['60+0', '1 daqiqa'], ['180+0', '3 daqiqa'], ['180+2', '3 + 2 soniya'], ['300+0', '5 daqiqa'], ['600+0', '10 daqiqa']];
+const TCS =[['60+0', '1 daqiqa'], ['180+0', '3 daqiqa'], ['180+2', '3 + 2 soniya'], ['300+0', '5 daqiqa'], ['600+0', '10 daqiqa']];
 const tcText = (tc) => (!tc || !tc.base ? 'Vaqtsiz' : `${tc.base / 60} daq${tc.inc ? ' + ' + tc.inc + ' s' : ''}`);
 const OREASON = { ...REASON, timeout: 'Vaqt tugadi', abandon: 'Oʻyinchi oʻyinni tashlab ketdi', aborted: 'Oʻyin bekor qilindi' };
 const EMOJIS = ['👍', '😂', '😮', '😡', '🤝', '🔥', '👏', '😎'];
@@ -797,7 +1018,11 @@ function openStats() {
   openModal(`<h2>Natijalar</h2><table class="stats"><tr><th>Rejim</th><th>Gʻ</th><th>M</th><th>D</th></tr>
     ${LEVELS.map((l) => row(l.name, S.stats['l' + l.id])).join('')}
     ${row('Bir telefonda', S.stats.friend ? { w: S.stats.friend.w, l: '–', d: S.stats.friend.d } : null)}</table>
-    <p class="muted" style="text-align:center">Gʻ — gʻalaba, M — magʻlubiyat, D — durang</p><button class="btn ghost" data-close>Yopish</button>`);
+    <p class="muted" style="text-align:center">Gʻ — gʻalaba, M — magʻlubiyat, D — durang</p>
+    <div class="streaks"><div><b>${(S.stats.days || {}).streak || 0}</b><small>kun ketma-ket</small></div><div><b>${(S.stats.puzzle || {}).solved ? S.stats.puzzle.solved.length : 0}</b><small>masala yechildi</small></div><div><b>${Object.keys(S.stats.ach || {}).length}/${ACHIEVEMENTS.length}</b><small>yutuq</small></div></div>
+    <div class="shop-sec">Yutuqlar</div>
+    <div class="ach-grid">${ACHIEVEMENTS.map((a) => { const got = (S.stats.ach || {})[a.id]; return `<div class="ach ${got ? 'got' : ''}"><span class="ach-ic">${icon(got ? a.icon : 'lock', 20)}</span><b>${a.title}</b><small>${a.desc}</small></div>`; }).join('')}</div>
+    <button class="btn ghost" data-close>Yopish</button>`);
 }
 
 // ───────────── ishga tushirish ─────────────
@@ -840,10 +1065,13 @@ async function init() {
   $('#btnOnline').onclick = () => { play('click'); openOnline(); };
   // onlayn: profil, xaridlar va Stars havolalari serverdan; deep link (startapp=r_<id> | ?room=<id> | top)
   if (NET.onlineAvailable()) {
-    NET.api('/api/me').then((me) => {
+    const sp0 = (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.start_param) || '';
+    const refId = /^ref_(\d{1,16})$/.exec(sp0);
+    NET.api('/api/me' + (refId ? '?ref=' + refId[1] : '')).then((me) => {
       S.me = me;
       for (const id of me.owned || []) S.owned.add(id);
       saveOwned();
+      afterEvent();
     }).catch(() => {});
     NET.api('/api/invoices').then((inv) => { S.invoices = inv; }).catch(() => {});
     const tg = window.Telegram && window.Telegram.WebApp;
@@ -852,6 +1080,7 @@ async function init() {
     if (sp.startsWith('r_') || qroom) joinRoom(qroom || sp.slice(2));
     else if (sp === 'top') openTop();
   }
+  if (new URLSearchParams(location.search).get('p') === 'daily' || ((window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.start_param) || '') === 'daily') startPuzzle(puzzleNumber());
   $('#btnStartAI').onclick = () => {
     const c = S.settings.lastColor || 'r';
     saveSettings();
@@ -859,6 +1088,10 @@ async function init() {
     startGame('ai', S.settings.lastLevel ?? 1, c === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : c);
   };
   $('#btnFriend').onclick = () => { play('click'); S.saved = null; startGame('friend', 0, 'w'); };
+  $('#btnPuzzle').onclick = () => { play('click'); openPuzzles(); };
+  $('#btnRef').onclick = () => { play('click'); openInvite(); };
+  updateHomeBadges();
+  afterEvent();
   $('#btnShop').onclick = () => { play('click'); openShop(); };
   $('#btnSettings').onclick = () => { play('click'); openSettings(); };
   $('#btnStats').onclick = () => { play('click'); openStats(); };
@@ -869,7 +1102,7 @@ async function init() {
   $('#tMenu').onclick = () => {
     openModal(`<h2>Menyu</h2><button class="btn" id="mNew">Yangi oʻyin</button><button class="btn" id="mShop">${icon('bag', 20)}Doʻkon</button>
       <button class="btn" id="mSet">${icon('gear', 20)}Sozlamalar</button><button class="btn" id="mHome">Bosh menyu</button><button class="btn ghost" data-close>Yopish</button>`);
-    $('#mNew').onclick = () => startGame(S.mode, S.level, S.player);
+    $('#mNew').onclick = () => (S.mode === 'task' ? taskRestart() : startGame(S.mode, S.level, S.player));
     $('#mShop').onclick = () => openShop();
     $('#mSet').onclick = () => openSettings();
     $('#mHome').onclick = () => goHome();

@@ -64,6 +64,21 @@ try {
       await sleep(350); await snap(`${san}_${rep}_b`);
       await sleep(1500);
     }
+  } else if (scenario === 'puzzle') {
+    // kunlik masala: notoʻgʻri yurish, keyin toʻgʻri yechim, natija, natijalar/yutuqlar oynasi
+    await ev(`document.querySelector('#btnPuzzle').click()`); await sleep(700); await snap('puzzles');
+    await ev(`document.querySelector('#pzToday').click()`); await sleep(3500); await snap('puzzle_start');
+    const sol = await ev(`__s3d.S.task.sol`);
+    const wrong = await ev(`(() => { const s = __s3d.S; const m = s.chess.moves({ verbose: true }).find((x) => !x.promotion && x.from + x.to !== s.task.sol[0].slice(0, 4)); return m.from + m.to; })()`);
+    await tapSquare(wrong.slice(0, 2)); await tapSquare(wrong.slice(2, 4)); await sleep(500); await snap('wrong'); await sleep(1500);
+    logs.push('STATE after wrong step=' + await ev('__s3d.S.task.step') + ' fen=' + await ev('__s3d.S.chess.fen()'));
+    await tapSquare(sol[0].slice(0, 2)); await tapSquare(sol[0].slice(2, 4)); await sleep(2600); await snap('after_reply');
+    const mate = await ev(`(() => { const c = __s3d.S.chess; const m = c.moves({ verbose: true }).find((x) => { c.move(x); const k = c.isCheckmate(); c.undo(); return k; }); return m ? m.from + m.to : null; })()`);
+    logs.push('STATE step=' + await ev('__s3d.S.task.step') + ' mate=' + mate);
+    await tapSquare(mate.slice(0, 2)); await tapSquare(mate.slice(2, 4)); await sleep(3500); await snap('solved');
+    logs.push('STATE puzzle stats ' + JSON.stringify(await ev('__s3d.S.stats.puzzle')) + ' ach ' + JSON.stringify(await ev('Object.keys(__s3d.S.stats.ach||{})')));
+    await ev(`document.querySelector('#pHome').click()`); await sleep(1500); await snap('home_after');
+    await ev(`document.querySelector('#btnStats').click()`); await sleep(600); await snap('stats');
   } else if (scenario === 'tap') {
     await ev(`document.querySelector('#btnFriend').click()`); await sleep(8000);
     logs.push('BUSY ' + await ev('__s3d.S.busy') + ' fps-check');

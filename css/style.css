@@ -70,8 +70,8 @@ button:focus-visible { outline: 2px solid var(--metal); outline-offset: 2px; }
 @keyframes settle { from { transform: rotate(-90deg) scale(.6); opacity: 0; } }
 @keyframes rise { from { transform: translateY(14px); opacity: 0; } }
 
-.menu { width: min(440px, 100%); margin: 0 auto; display: grid; gap: 12px; }
-.row-btn { display: flex; align-items: center; gap: 0; width: 100%; padding: 16px 18px; text-align: left; color: var(--ink);
+.menu { width: min(440px, 100%); margin: 0 auto; display: grid; gap: 10px; }
+.row-btn { display: flex; align-items: center; gap: 0; width: 100%; padding: 13px 18px; text-align: left; color: var(--ink);
   background: var(--paper-2); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow);
   transition: transform .12s, background .12s; }
 .row-ic { flex: none; width: 34px; height: 34px; display: grid; place-items: center; color: var(--metal);
@@ -236,3 +236,33 @@ table.stats td:first-child, table.stats th:first-child { text-align: left; font-
 .femoji { position: fixed; z-index: 30; font-size: 52px; pointer-events: none; animation: femoji 2.2s ease-out forwards; }
 @keyframes femoji { 0% { transform: scale(.3) translateY(16px); opacity: 0; } 15% { transform: scale(1.15); opacity: 1; } 30% { transform: scale(1); } 80% { opacity: 1; } 100% { transform: translateY(-50px); opacity: 0; } }
 .linkbox { margin: 12px 0 2px; padding: 10px 12px; border: 1px dashed var(--metal); border-radius: 10px; font-size: 13px; color: var(--ink); word-break: break-all; text-align: center; user-select: text; -webkit-user-select: text; }
+
+/* ───────── Kunlik masala, taklif, yutuqlar ───────── */
+.mini-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.mini-btn { display: flex; align-items: center; gap: 10px; padding: 11px 12px; text-align: left; color: var(--ink);
+  background: var(--paper-2); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); }
+.mini-btn:active { transform: scale(.985); background: var(--paper-3); }
+.mini-ic { flex: none; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: var(--paper-3); color: var(--metal); }
+.mini-t { display: grid; gap: 1px; font-weight: 700; font-size: 14.5px; line-height: 1.15; min-width: 0; }
+.mini-t small { font-weight: 400; font-size: 12px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini-btn.done .mini-ic { background: var(--steel); color: #fff; }
+.streak { display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--ink) !important; }
+.pz-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 7px; margin: 14px 0 4px; }
+.pz { display: flex; align-items: center; justify-content: center; gap: 3px; height: 42px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--paper-2); font-weight: 700; font-size: 14px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.pz.done { background: var(--steel); border-color: var(--steel); color: #fff; }
+.pz.today { box-shadow: inset 0 0 0 2px var(--steel); }
+.ref-box { display: flex; align-items: center; gap: 14px; margin: 14px 0 4px; padding: 14px 16px; border-radius: 14px; background: var(--paper-2); border: 1px solid var(--line); font-weight: 600; }
+.ref-box small { display: block; font-weight: 400; color: var(--ink-2); font-size: 13px; margin-top: 2px; }
+.ref-n { font: 800 34px/1 var(--sans); color: var(--steel); min-width: 40px; text-align: center; }
+.streaks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0 0; }
+.streaks > div { display: grid; justify-items: center; padding: 10px 4px; border-radius: 12px; background: var(--paper-2); border: 1px solid var(--line); }
+.streaks b { font: 800 22px/1.1 var(--sans); color: var(--ink); }
+.streaks small { font-size: 12px; color: var(--muted); }
+.ach-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ach { display: grid; gap: 2px; padding: 11px; border-radius: 12px; border: 1px solid var(--line); background: var(--paper-2); opacity: .62; }
+.ach b { font-size: 13.5px; line-height: 1.2; }
+.ach small { font-size: 11.5px; color: var(--muted); line-height: 1.25; }
+.ach-ic { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: var(--paper-3); color: var(--muted); margin-bottom: 4px; }
+.ach.got { opacity: 1; border-color: var(--metal-lo); }
+.ach.got .ach-ic { background: var(--steel-grad); color: #fff; }
