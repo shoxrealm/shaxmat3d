@@ -385,6 +385,16 @@ const RU = {
   'Doʻstingizni taklif qiling': 'Пригласите друга',
   'Doʻstlar davrasi': 'Круг друзей',
   '5 ta doʻstni taklif qiling': 'Пригласите 5 друзей',
+  // bot raqib, onlayn soni, turnir ochkolari
+  'Bot reytingi: {d} → {r}': 'Рейтинг против ботов: {d} → {r}',
+  'Bot bilan oʻyinda «Orqaga» yoʻq — xuddi onlayndagidek': 'В игре с ботом нет отмены хода — как в онлайне',
+  'Bot bilan oʻyinda maslahat yoʻq — xuddi onlayndagidek': 'В игре с ботом нет подсказок — как в онлайне',
+  'Hozir boʻsh onlayn raqib yoʻq. Kutishda davom etishingiz yoki bot raqib bilan oʻynashingiz mumkin.': 'Сейчас нет свободных соперников онлайн. Можно подождать или сыграть с ботом.',
+  'Bot raqib bilan oʻynash': 'Играть с ботом',
+  'Hozir ilovada: {n} kishi': 'Сейчас в приложении: {n} {n|человек|человека|человек}',
+  'hozir onlayn: {n}': 'сейчас онлайн: {n}',
+  'Ochkolar: onlayn gʻalaba — 1, durang — ½, kunlik masala — 1, bot ustidan gʻalaba — ½ (kuniga 3 tagacha). Kamida {n} ta ochkoli harakat qiling. Hafta gʻolibiga yangi mavzu yoki effekt sovgʻa qilinadi.':
+    'Очки: победа онлайн — 1, ничья — ½, ежедневная задача — 1, победа над ботом — ½ (до 3 в день). Наберите очки минимум в {n} играх или задачах. Победитель недели получает новую тему или эффект.',
 };
 
 const RU_CODES = ['ru', 'uk', 'be', 'kk', 'ky'];

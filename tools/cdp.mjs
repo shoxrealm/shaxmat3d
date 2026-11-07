@@ -34,7 +34,7 @@ const send = (method, params = {}) => new Promise((r) => { const i = ++id; pendi
 const ev = async (expr) => { const r = await send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }); return r.result?.result?.value ?? r.result?.exceptionDetails?.exception?.description; };
 let shot = 0;
 async function snap(name) {
-  const r = await send('Page.captureScreenshot', { format: 'jpeg', quality: 70 });
+  const r = await send('Page.captureScreenshot', { format: 'jpeg', quality: +(process.env.JPGQ || 70) });
   writeFileSync(join(outDir, `${String(++shot).padStart(2, '0')}_${name}.jpg`), Buffer.from(r.result.data, 'base64'));
 }
 async function tapSquare(sq) { // ekran koordinatasini sahnadan hisoblaymiz
@@ -48,9 +48,9 @@ async function tapSquare(sq) { // ekran koordinatasini sahnadan hisoblaymiz
 try {
   await connect();
   await send('Runtime.enable'); await send('Log.enable'); await send('Page.enable');
-  await send('Emulation.setDeviceMetricsOverride', { width: +w, height: +h, deviceScaleFactor: 1, mobile: +w < 600 });
+  await send('Emulation.setDeviceMetricsOverride', { width: +w, height: +h, deviceScaleFactor: +(process.env.DSF || 1), mobile: +w < 600 });
   await send('Page.navigate', { url });
-  await sleep(9000);
+  await sleep(+(process.env.WAIT || 9000));
   await snap('home');
   if (scenario === 'captures') {
     await ev(`document.querySelector('#home').classList.add('hidden'); __s3d.scene.setIdle(false); __s3d.scene.setInsets(40, 40); __s3d.scene.setOrientation('w', false)`);
@@ -64,6 +64,22 @@ try {
       await sleep(350); await snap(`${san}_${rep}_b`);
       await sleep(1500);
     }
+  } else if (scenario === 'bot') {
+    // onlayn qidiruv → 20 s → bot taklifi → bot oʻyini → soat → vaqt tugashi
+    logs.push('STATE online label: ' + await ev(`document.querySelector('#btnOnline small').textContent`));
+    await ev(`document.querySelector('#btnOnline').click()`); await sleep(800);
+    await ev(`document.querySelector('#tcQuick [data-tc="180+0"]').click()`); await sleep(22000); await snap('offer');
+    logs.push('STATE offer ' + await ev(`!!document.querySelector('#mmBot')`));
+    await ev(`document.querySelector('#mmBot').click()`); await sleep(4000); await snap('bot_start');
+    logs.push('STATE bot ' + JSON.stringify(await ev(`({ name: __s3d.S.bot.name, rating: __s3d.S.bot.rating, level: __s3d.S.level, player: __s3d.S.player, clocks: __s3d.S.bot.clocks })`)));
+    // oq boʻlsak — yuramiz, qora boʻlsak bot yuradi
+    if (await ev(`__s3d.S.player`) === 'w') { await tapSquare('e2'); await tapSquare('e4'); }
+    await sleep(5000); await snap('after_moves');
+    logs.push('STATE hist ' + await ev(`__s3d.S.chess.history().join(' ')`) + ' clocks ' + JSON.stringify(await ev(`__s3d.S.bot.clocks`)));
+    await ev(`(() => { const s = __s3d.S; s.bot.clocks[s.chess.turn()] = 1200; })()`); await sleep(5000); await snap('timeout');
+    logs.push('STATE over=' + await ev(`__s3d.S.over`) + ' botRating=' + await ev(`__s3d.S.stats.botRating`) + ' modal=' + await ev(`document.querySelector('#modalCard h2') && document.querySelector('#modalCard h2').textContent`));
+  } else if (scenario === 'shop') {
+    await ev(`document.querySelector('#btnShop').click()`); await sleep(1500); await snap('shop');
   } else if (scenario === 'puzzle') {
     // kunlik masala: notoʻgʻri yurish, keyin toʻgʻri yechim, natija, natijalar/yutuqlar oynasi
     await ev(`document.querySelector('#btnPuzzle').click()`); await sleep(700); await snap('puzzles');

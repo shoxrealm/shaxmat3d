@@ -15,7 +15,7 @@ import { LANG, t, applyStatic } from './i18n.js';
 const $ = (s) => document.querySelector(s);
 const VAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
 const REASON = { checkmate: t('Mat'), stalemate: t('Pat'), threefold: t('Uch marta takrorlanish'), fifty: t('50 yurish qoidasi'),
-  insufficient: t('Mat qilish uchun dona yetarli emas'), resign: t('Taslim boʻlindi'), agreed: t('Kelishuv boʻyicha durang') };
+  insufficient: t('Mat qilish uchun dona yetarli emas'), resign: t('Taslim boʻlindi'), agreed: t('Kelishuv boʻyicha durang'), timeout: t('Vaqt tugadi') };
 
 const S = {
   chess: new Chess(), mode: null, level: 1, player: 'w', busy: false, selected: null, targets: [], over: false,
@@ -60,7 +60,7 @@ function kingSquare(color) {
 
 // ───────────── saqlash ─────────────
 function saveGame() {
-  if (S.mode === 'online' || S.mode === 'task') return;
+  if (S.mode === 'online' || S.mode === 'task' || S.bot) return;
   if (!S.mode || S.over) { TG.storeSet('game', null); return; }
   const moves = S.chess.history({ verbose: true }).map((m) => m.from + m.to + (m.promotion || ''));
   TG.storeSet('game', { mode: S.mode, level: S.level, player: S.player, moves, undos: S.undos, hints: S.hints });
@@ -84,6 +84,7 @@ function updateHUD() {
   const room = S.mode === 'online' && S.online && S.online.room;
   const name = (c) => {
     if (S.mode === 'task') return c === S.player ? `${t('Siz')} <span class="rt">${S.task.goal}</span>` : S.task.title;
+    if (S.bot) return c === S.player ? `${escapeHtml(myName())}<span class="rt">${botRating()}</span>` : `${escapeHtml(S.bot.name)}<span class="rt">${S.bot.rating}</span><span class="bot-tag">BOT</span>`;
     if (S.mode === 'ai') return c === S.player ? escapeHtml(myName()) : `${t('Kompyuter')} <span class="rt">${t(LEVELS[S.level].name)}</span>`;
     if (room) {
       const p = c === 'w' ? room.white : room.black;
@@ -113,9 +114,9 @@ function updateHUD() {
   }
   box.scrollLeft = box.scrollWidth;
   const pro = isPro();
-  const on = S.mode === 'online', task = S.mode === 'task';
-  $('#tUndo em').textContent = on || task ? '' : pro ? '∞' : String(Math.max(0, FREE_UNDOS - S.undos));
-  $('#tHint em').textContent = on || task ? '' : pro ? '∞' : String(Math.max(0, FREE_HINTS - S.hints));
+  const on = S.mode === 'online', task = S.mode === 'task', botG = !!S.bot;
+  $('#tUndo em').textContent = on || task || botG ? '' : pro ? '∞' : String(Math.max(0, FREE_UNDOS - S.undos));
+  $('#tHint em').textContent = on || task || botG ? '' : pro ? '∞' : String(Math.max(0, FREE_HINTS - S.hints));
   $('#tUndo i').innerHTML = icon(on ? 'smile' : 'undo'); $('#tUndo span').textContent = on ? t('Emoji') : t('Orqaga');
   $('#tHint i').innerHTML = icon(on ? 'half' : 'hint'); $('#tHint span').textContent = on ? t('Durang') : t('Maslahat');
   $('#tResign span').textContent = S.mode === 'friend' ? t('Durang') : task ? t('Yechim') : t('Taslim');
@@ -131,6 +132,10 @@ function fmtClock(ms) {
   return ms < 10000 ? (ms / 1000).toFixed(1) : `${m}:${String(s % 60).padStart(2, '0')}`;
 }
 function clockLeft(c) {
+  if (S.bot) {
+    const b = S.bot;
+    return b.clocks[c] - (!S.over && b.turnAt && S.chess.turn() === c ? Date.now() - b.turnAt : 0);
+  }
   const r = S.online && S.online.room;
   if (!r || !r.tc || !r.tc.base) return null;
   let ms = r.clocks[c];
@@ -140,15 +145,22 @@ function clockLeft(c) {
 function drawClocks() {
   for (const bar of [$('#barTop'), $('#barBottom')]) {
     let el = bar.querySelector('.clk');
-    const ms = S.mode === 'online' ? clockLeft(bar.dataset.color) : null;
+    const ms = S.mode === 'online' || S.bot ? clockLeft(bar.dataset.color) : null;
     if (ms === null) { if (el) el.remove(); continue; }
     if (!el) { el = document.createElement('div'); el.className = 'clk'; bar.appendChild(el); }
     el.textContent = fmtClock(ms);
     el.classList.toggle('low', ms < 20000);
-    el.classList.toggle('run', S.online.room.status === 'playing' && S.chess.turn() === bar.dataset.color && !!S.online.room.turnStartedAt);
+    el.classList.toggle('run', S.bot ? !S.over && !!S.bot.turnAt && S.chess.turn() === bar.dataset.color
+      : S.online.room.status === 'playing' && S.chess.turn() === bar.dataset.color && !!S.online.room.turnStartedAt);
   }
 }
-setInterval(() => { if (S.mode === 'online') drawClocks(); }, 200);
+setInterval(() => {
+  if (S.mode === 'online' || S.bot) drawClocks();
+  if (S.bot && !S.over && S.bot.turnAt && clockLeft(S.chess.turn()) <= 0) {
+    const loser = S.chess.turn();
+    checkGameOver({ reason: 'timeout', winner: loser === 'w' ? 'b' : 'w' });
+  }
+}, 200);
 
 function setThinking(on) {
   const aiColor = S.player === 'w' ? 'b' : 'w';
@@ -164,8 +176,9 @@ function flashStatus(text, ms = 1100) {
 }
 
 // ───────────── oʻyin oqimi ─────────────
-async function startGame(mode, level = 1, color = 'w', restore = null) {
+async function startGame(mode, level = 1, color = 'w', restore = null, bot = null) {
   closeModal(); $('#levelSheet').classList.add('hidden');
+  S.bot = bot;
   S.mode = mode; S.level = level; S.player = color; S.over = false; S.busy = true;
   S.undos = restore ? restore.undos || 0 : 0; S.hints = restore ? restore.hints || 0 : 0;
   S.selected = null; S.aiReq++;
@@ -181,6 +194,7 @@ async function startGame(mode, level = 1, color = 'w', restore = null) {
   await scene.setBoard(S.chess.board(), true);
   afterPosition(true);
   S.busy = false;
+  if (S.bot) S.bot.turnAt = Date.now();
   saveGame();
   maybeAI();
 }
@@ -254,12 +268,14 @@ async function playMove(m, dropped = false, local = false) {
     r && r.moves.push(mv.from + mv.to + (mv.promotion || ''));
     S.online.drawOffer = null;
   }
+  if (S.bot && S.bot.turnAt) { S.bot.clocks[mv.color] += S.bot.tc.inc * 1000 - (Date.now() - S.bot.turnAt); S.bot.turnAt = null; }
   const kind = mv.flags.includes('k') || mv.flags.includes('q') ? 'castle' : mv.captured ? 'capture' : 'move';
   if (kind === 'capture' && scene.effect === 'chaqmoq') setTimeout(() => play('zap'), 250);
   if (kind === 'capture' && scene.effect === 'olov') setTimeout(() => play('fire'), 250);
   await scene.animateMove(mv, { dropped });
   play(mv.promotion ? 'promote' : kind);
   TG.haptic(kind === 'capture' ? 'medium' : 'light');
+  if (S.bot && !S.over) S.bot.turnAt = Date.now();
   afterPosition();
   saveGame();
   S.busy = false;
@@ -272,10 +288,17 @@ async function maybeAI() {
   setThinking(true);
   const req = S.aiReq + 1;
   const t0 = performance.now();
-  const r = await aiSearch(S.chess.fen(), LEVELS[S.level].opts);
+  let opts = LEVELS[S.level].opts;
+  if (S.bot) {
+    const left = clockLeft(S.chess.turn());
+    opts = { ...opts, timeMs: Math.max(120, Math.min(opts.timeMs || 1000, left / 35)) };
+  }
+  const r = await aiSearch(S.chess.fen(), opts);
   if (req !== S.aiReq || S.mode !== 'ai' || S.over) { setThinking(false); return; } // oʻyin almashgan
   const spent = performance.now() - t0;
-  if (spent < 450) await new Promise((res) => setTimeout(res, 450 - spent));
+  const pad = S.bot ? 600 + Math.random() * 900 : 450; // bot ham biroz "oʻylaydi"
+  if (spent < pad) await new Promise((res) => setTimeout(res, pad - spent));
+  if (req !== S.aiReq || S.over) { setThinking(false); return; }
   setThinking(false);
   if (!r.ok || !r.move) { S.busy = false; return; }
   await playMove({ from: r.move.slice(0, 2), to: r.move.slice(2, 4), promotion: r.move[4] });
@@ -299,9 +322,16 @@ async function checkGameOver(forced = null) {
   let outcome = 'draw';
   if (winner) outcome = S.mode === 'ai' ? (winner === S.player ? 'win' : 'loss') : 'win';
   // statistika
-  const key = S.mode === 'ai' ? 'l' + S.level : 'friend';
+  const key = S.bot ? 'bot' : S.mode === 'ai' ? 'l' + S.level : 'friend';
   const st = S.stats[key] || (S.stats[key] = { w: 0, l: 0, d: 0 });
   st[outcome === 'win' ? 'w' : outcome === 'loss' ? 'l' : 'd']++;
+  if (S.bot) {
+    const my = botRating(), exp = 1 / (1 + 10 ** ((S.bot.rating - my) / 400));
+    const score = outcome === 'win' ? 1 : outcome === 'loss' ? 0 : 0.5;
+    S.bot.delta = Math.round(24 * (score - exp));
+    S.stats.botRating = my + S.bot.delta;
+    if (outcome === 'win' && NET.onlineAvailable()) NET.api('/api/points', { kind: 'bot' }).catch(() => {});
+  }
   if (S.mode === 'ai' && outcome === 'win' && reason === 'checkmate') S.stats.fastest = Math.min(S.stats.fastest || 99, Math.ceil(c.history().length / 2));
   markPlayedDay(S.stats);
   TG.storeSet('stats', S.stats);
@@ -329,16 +359,18 @@ function showResult(outcome, reason, winner) {
   else if (outcome === 'loss') title = t('Magʻlubiyat');
   else title = t('Durang');
   const moves = Math.ceil(S.chess.history().length / 2);
+  const nextLvl = S.mode === 'ai' && !S.bot && outcome === 'win' && S.level < 3;
   openModal(`<div class="result ${outcome}">${medallion(big)}<h2>${title}</h2><p>${t('{reason}, {n} yurish', { reason: REASON[reason] || '', n: moves })}</p>
-    ${S.mode === 'ai' && outcome === 'win' && S.level < 3 ? `<p>${t('Keyingi daraja: <b>{level}</b> — sinab koʻrasizmi?', { level: t(LEVELS[S.level + 1].name) })}</p>` : ''}
+    ${S.bot ? `<p class="delta ${S.bot.delta >= 0 ? 'up' : 'down'}">${t('Bot reytingi: {d} → {r}', { d: (S.bot.delta >= 0 ? '+' : '') + S.bot.delta, r: botRating() })}</p>` : ''}
+    ${nextLvl ? `<p>${t('Keyingi daraja: <b>{level}</b> — sinab koʻrasizmi?', { level: t(LEVELS[S.level + 1].name) })}</p>` : ''}
     <button class="btn primary" id="rAgain">${t('Yana oʻynash')}</button>
-    ${S.mode === 'ai' && outcome === 'win' && S.level < 3 ? `<button class="btn" id="rNext">${t('⬆️ Keyingi daraja')}</button>` : ''}
+    ${nextLvl ? `<button class="btn" id="rNext">${t('⬆️ Keyingi daraja')}</button>` : ''}
     <button class="btn" id="rAn">${icon('chart', 20)}${t('Oʻyin tahlili')}</button>
     <button class="btn" id="rShare">${icon('send', 20)}${t('Natijani ulashish')}</button>
     <button class="btn ghost" id="rHome">${t('Bosh menyu')}</button></div>`);
-  $('#rAgain').onclick = () => startGame(S.mode, S.level, S.mode === 'ai' ? (S.settings.lastColor === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : S.player) : 'w');
+  $('#rAgain').onclick = () => S.bot ? startBotGame(S.bot.tcStr) : startGame(S.mode, S.level, S.mode === 'ai' ? (S.settings.lastColor === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : S.player) : 'w');
   const nx = $('#rNext'); if (nx) nx.onclick = () => startGame('ai', S.level + 1, S.player);
-  const who = S.mode === 'ai' ? t('Kompyuter ({level})', { level: t(LEVELS[S.level].name) }) : t('Bir telefonda');
+  const who = S.bot ? `${S.bot.name} (Bot, ${S.bot.rating})` : S.mode === 'ai' ? t('Kompyuter ({level})', { level: t(LEVELS[S.level].name) }) : t('Bir telefonda');
   $('#rShare').onclick = () => shareResult(`${title} ${big}`, t('{who} · {reason} · {n} yurish', { who, reason: REASON[reason] || '', n: moves }));
   $('#rAn').onclick = () => analyzeGame();
   $('#rHome').onclick = () => goHome();
@@ -349,11 +381,12 @@ function goHome() {
   scene.confetti.n = 0;
   leaveOnline();
   S.busy = false; S.selected = null; scene.clearSelection(); scene.clearHint();
-  const wasOnline = S.mode === 'online', wasTask = S.mode === 'task';
+  const wasOnline = S.mode === 'online', wasTask = S.mode === 'task', wasBot = !!S.bot;
+  S.bot = null;
   if (!S.over && S.mode) saveGame();
   S.mode = null;
   S.task = null;
-  if (wasOnline || wasTask) { S.chess = new Chess(); scene.syncBoard(S.chess.board()); scene.setLastMove(null); scene.setCheck(null); }
+  if (wasOnline || wasTask || wasBot) { S.chess = new Chess(); scene.syncBoard(S.chess.board()); scene.setLastMove(null); scene.setCheck(null); }
   $('#hud').classList.add('hidden'); $('#home').classList.remove('hidden');
   $('#btnContinue').classList.toggle('hidden', !S.chess.history().length || S.over);
   updateHomeBadges();
@@ -366,6 +399,7 @@ function goHome() {
 async function doUndo() {
   if (S.mode === 'online') return openEmoji();
   if (S.mode === 'task') return taskRestart();
+  if (S.bot) return toast(t('Bot bilan oʻyinda «Orqaga» yoʻq — xuddi onlayndagidek'));
   if (S.busy || !S.mode || S.over) return;
   if (!S.chess.history().length) return toast(t('Hali yurish qilinmagan'));
   if (!isPro() && S.undos >= FREE_UNDOS) return upsell(t('Bepul «Orqaga» tugadi (oʻyinda 3 ta).'));
@@ -384,6 +418,7 @@ async function doUndo() {
 async function doHint() {
   if (S.mode === 'online') return offerDraw();
   if (S.mode === 'task') return taskHint();
+  if (S.bot) return toast(t('Bot bilan oʻyinda maslahat yoʻq — xuddi onlayndagidek'));
   if (S.busy || !S.mode || S.over || !isHumanTurn()) return;
   if (!isPro() && S.hints >= FREE_HINTS) return upsell(t('Bepul maslahat tugadi (oʻyinda 1 ta).'));
   S.busy = true; toast(t('Eng yaxshi yurish izlanmoqda…'), 1200);
@@ -572,6 +607,7 @@ async function taskSolved() {
   }
   markPlayedDay(S.stats);
   TG.storeSet('stats', S.stats);
+  if (t.n === today && NET.onlineAvailable()) NET.api('/api/points', { kind: 'puzzle', n: today }).catch(() => {});
   await new Promise((r) => setTimeout(r, 1800));
   const daily = tk.n === today;
   const next = nextUnsolved(tk.n);
@@ -858,12 +894,36 @@ async function openTourney() {
   try { tr = await NET.api('/api/tournament'); } catch (e) { toast(t('Turnirni yuklab boʻlmadi')); closeModal(); return; }
   const left = Math.max(0, tr.endsAt - Date.now()), d = Math.floor(left / 86400000), h = Math.floor((left % 86400000) / 3600000);
   openModal(`<h2>${t('Haftalik turnir')}</h2>
-    <p class="muted center">${t('Reytingli onlayn oʻyinlar: gʻalaba — 1, durang — ½ ochko. Kamida {n} ta oʻyin oʻynang. Hafta gʻolibiga yangi mavzu yoki effekt sovgʻa qilinadi.', { n: tr.minGames })}</p>
+    <p class="muted center">${t('Ochkolar: onlayn gʻalaba — 1, durang — ½, kunlik masala — 1, bot ustidan gʻalaba — ½ (kuniga 3 tagacha). Kamida {n} ta ochkoli harakat qiling. Hafta gʻolibiga yangi mavzu yoki effekt sovgʻa qilinadi.', { n: tr.minGames })}</p>
     <div class="streaks"><div><b>${t('{d}k {h}s', { d, h })}</b><small>${t('tugashiga')}</small></div><div><b>${tr.me ? tr.me.rank : '—'}</b><small>${t('sizning oʻrningiz')}</small></div><div><b>${tr.me ? tr.me.pts : 0}</b><small>${t('ochko')}</small></div></div>
     <table class="stats"><tr><th>#</th><th>${t('Oʻyinchi')}</th><th>${t('Ochko')}</th><th>${t('Oʻyin')}</th></tr>
     ${tr.top.map((r) => `<tr class="${r.me ? 'me' : ''}"><td>${r.rank}</td><td style="text-align:left">${escapeHtml(r.name)}</td><td>${r.pts}</td><td>${r.games}</td></tr>`).join('') || `<tr><td colspan="4">${t('Bu hafta hali oʻyin yoʻq — birinchi boʻling!')}</td></tr>`}</table>
     <button class="btn primary" id="trPlay">${t('Reytingli oʻyin boshlash')}</button><button class="btn ghost" data-close>${t('Yopish')}</button>`);
   $('#trPlay').onclick = () => openOnline();
+}
+
+// ───────────── bot raqib (onlayn raqib boʻlmaganda) ─────────────
+const BOT_NAMES = ['Temur', 'Ulugʻbek', 'Nodir', 'Jasur', 'Malika', 'Dilnoza', 'Sardor', 'Bobur', 'Laylo', 'Aziz', 'Kamola', 'Sherzod'];
+function botRating() { return S.stats.botRating || 1200; }
+function startBotGame(tc) {
+  const [base, inc] = String(tc).split('+').map(Number);
+  const rating = Math.max(700, Math.round(botRating() + (Math.random() * 160 - 80)));
+  const level = rating < 1050 ? 0 : rating < 1300 ? 1 : rating < 1550 ? 2 : 3;
+  const ms = (base || 600) * 1000;
+  const bot = { name: 'Bot ' + BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)], rating, tc: { base: base || 600, inc: inc || 0 }, tcStr: tc,
+    clocks: { w: ms, b: ms }, turnAt: null, delta: 0 };
+  play('promote');
+  return startGame('ai', level, Math.random() < 0.5 ? 'w' : 'b', null, bot);
+}
+
+// ───────────── hozir onlayn ─────────────
+async function refreshOnline() {
+  if (!NET.onlineAvailable() || document.hidden) return;
+  try {
+    S.onlineNow = await NET.api('/api/online');
+    const sm = $('#btnOnline small');
+    if (sm) sm.textContent = t('Reyting yoki doʻst bilan') + ' · ' + t('hozir onlayn: {n}', { n: S.onlineNow.online });
+  } catch (e) { /* jim */ }
 }
 
 function startMatch(tc) {
@@ -872,8 +932,21 @@ function startMatch(tc) {
   const t0 = Date.now();
   openModal(`<div class="result searching">${medallion('♞')}<h2>${t('Raqib izlanmoqda')}</h2>
     <p>${tcText({ base: +tc.split('+')[0], inc: +tc.split('+')[1] })} · <span id="mmT">0</span> ${t('s')}</p>
+    ${S.onlineNow ? `<p class="muted center">${t('Hozir ilovada: {n} kishi', { n: S.onlineNow.online })}</p>` : ''}
     <button class="btn ghost" id="mmCancel">${t('Bekor qilish')}</button></div>`);
-  const tick = setInterval(() => { const el = $('#mmT'); if (el) el.textContent = Math.floor((Date.now() - t0) / 1000); else clearInterval(tick); }, 500);
+  let offered = false;
+  const tick = setInterval(() => {
+    const el = $('#mmT'); if (!el) { clearInterval(tick); return; }
+    const s = Math.floor((Date.now() - t0) / 1000); el.textContent = s;
+    if (s >= 20 && !offered) {
+      offered = true;
+      const box = document.createElement('div');
+      box.innerHTML = `<p class="muted center">${t('Hozir boʻsh onlayn raqib yoʻq. Kutishda davom etishingiz yoki bot raqib bilan oʻynashingiz mumkin.')}</p>
+        <button class="btn primary" id="mmBot">${icon('chip', 20)}${t('Bot raqib bilan oʻynash')}</button>`;
+      $('#mmCancel').before(box);
+      $('#mmBot').onclick = () => { closeModal.onClose = null; cancel(); startBotGame(tc); };
+    }
+  }, 500);
   const cancel = () => { clearInterval(tick); if (S.matchWs) { S.matchWs.close(); S.matchWs = null; } };
   closeModal.onClose = cancel;
   $('#mmCancel').onclick = () => closeModal();
@@ -1327,6 +1400,7 @@ async function init() {
   $('#btnLessons').onclick = () => { play('click'); openLessons(); };
   updateHomeBadges();
   afterEvent();
+  refreshOnline(); setInterval(refreshOnline, 60000);
   $('#btnShop').onclick = () => { play('click'); openShop(); };
   $('#btnSettings').onclick = () => { play('click'); openSettings(); };
   $('#btnStats').onclick = () => { play('click'); openStats(); };
@@ -1344,7 +1418,7 @@ async function init() {
   };
   // birinchi teginishda audio kontekstni uygʻotamiz
   window.addEventListener('pointerdown', () => play('none'), { once: true });
-  window.__s3d = { S, scene, resultCard }; // test uchun
+  window.__s3d = { S, scene, resultCard, startBotGame }; // test uchun
 }
 
 init().catch((e) => {
