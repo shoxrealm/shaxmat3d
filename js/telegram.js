@@ -9,8 +9,8 @@ export function initTelegram() {
     tg.ready();
     tg.expand();
     if (tg.disableVerticalSwipes) tg.disableVerticalSwipes();
-    if (tg.setHeaderColor) tg.setHeaderColor('#F4EEE3');
-    if (tg.setBackgroundColor) tg.setBackgroundColor('#F4EEE3');
+    if (tg.setHeaderColor) tg.setHeaderColor('#EEF0F2');
+    if (tg.setBackgroundColor) tg.setBackgroundColor('#EEF0F2');
     if (tg.requestFullscreen && tg.isVersionAtLeast && tg.isVersionAtLeast('8.0') && /android|iphone|ipad/i.test(navigator.userAgent)) {
       // toʻliq ekran faqat telefonlarda
       try { tg.requestFullscreen(); } catch (e) { /* ignore */ }
