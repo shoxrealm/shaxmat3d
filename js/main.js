@@ -838,12 +838,29 @@ function openOnline() {
     <p class="muted">Doʻstni havola bilan chaqirish</p>
     <div class="chips" id="tcFriend">${[...TCS, ['0+0', 'Vaqtsiz']].map(([v, l]) => `<button class="chip ${v === '600+0' ? 'active' : ''}" data-tc="${v}">${l}</button>`).join('')}</div>
     <button class="btn primary" id="btnInvite">${icon('link', 20)}Havola yaratish</button>
-    <button class="btn" id="btnTop">${icon('trophy', 20)}Reyting jadvali</button><button class="btn ghost" data-close>Yopish</button>`);
+    <button class="btn" id="btnTour">${icon('trophy', 20)}Haftalik turnir</button>
+    <button class="btn" id="btnTop">${icon('chart', 20)}Reyting jadvali</button><button class="btn ghost" data-close>Yopish</button>`);
   const c = $('#modalCard');
   c.querySelectorAll('#tcQuick .chip').forEach((b) => (b.onclick = () => startMatch(b.dataset.tc)));
   c.querySelectorAll('#tcFriend .chip').forEach((b) => (b.onclick = () => { c.querySelectorAll('#tcFriend .chip').forEach((x) => x.classList.toggle('active', x === b)); play('click'); }));
   $('#btnInvite').onclick = () => createRoom(c.querySelector('#tcFriend .chip.active').dataset.tc);
   $('#btnTop').onclick = () => openTop();
+  $('#btnTour').onclick = () => openTourney();
+}
+
+async function openTourney() {
+  if (!needOnline()) return;
+  openModal('<h2>Haftalik turnir</h2><p class="muted center">Yuklanmoqda…</p>');
+  let tr;
+  try { tr = await NET.api('/api/tournament'); } catch (e) { toast('Turnirni yuklab boʻlmadi'); closeModal(); return; }
+  const left = Math.max(0, tr.endsAt - Date.now()), d = Math.floor(left / 86400000), h = Math.floor((left % 86400000) / 3600000);
+  openModal(`<h2>Haftalik turnir</h2>
+    <p class="muted center">Reytingli onlayn oʻyinlar: gʻalaba — 1, durang — ½ ochko. Kamida ${tr.minGames} ta oʻyin oʻynang. Hafta gʻolibiga yangi mavzu yoki effekt sovgʻa qilinadi.</p>
+    <div class="streaks"><div><b>${d}k ${h}s</b><small>tugashiga</small></div><div><b>${tr.me ? tr.me.rank : '—'}</b><small>sizning oʻrningiz</small></div><div><b>${tr.me ? tr.me.pts : 0}</b><small>ochko</small></div></div>
+    <table class="stats"><tr><th>#</th><th>Oʻyinchi</th><th>Ochko</th><th>Oʻyin</th></tr>
+    ${tr.top.map((r) => `<tr class="${r.me ? 'me' : ''}"><td>${r.rank}</td><td style="text-align:left">${escapeHtml(r.name)}</td><td>${r.pts}</td><td>${r.games}</td></tr>`).join('') || '<tr><td colspan="4">Bu hafta hali oʻyin yoʻq — birinchi boʻling!</td></tr>'}</table>
+    <button class="btn primary" id="trPlay">Reytingli oʻyin boshlash</button><button class="btn ghost" data-close>Yopish</button>`);
+  $('#trPlay').onclick = () => openOnline();
 }
 
 function startMatch(tc) {
@@ -1280,6 +1297,7 @@ async function init() {
     if (sp.startsWith('r_') || qroom) joinRoom(qroom || sp.slice(2));
     else if (sp === 'top') openTop();
   }
+  if (new URLSearchParams(location.search).get('p') === 'tourney') openTourney();
   if (new URLSearchParams(location.search).get('p') === 'daily' || ((window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.start_param) || '') === 'daily') startPuzzle(puzzleNumber());
   $('#btnStartAI').onclick = () => {
     const c = S.settings.lastColor || 'r';

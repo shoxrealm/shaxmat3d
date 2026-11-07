@@ -296,3 +296,4 @@ table.stats td:first-child, table.stats th:first-child { text-align: left; font-
 .an-no { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 34px; }
 .an-best { margin-left: auto; color: var(--ink-2); font-size: 13px; display: flex; align-items: center; gap: 4px; }
 .an-row.locked { opacity: .6; }
+table.stats tr.me td { font-weight: 800; background: var(--paper-3); }
